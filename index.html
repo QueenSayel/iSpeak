@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- The title will be set by JavaScript -->
+    <title>iSpeak - Modern English Language School</title>
+    
+    <!-- SEO Meta Tags - Also set by JavaScript -->
+    <meta name="description" content="Unlock your English potential with iSpeak. I offer personalized online courses, private tutoring, and business English training. Start your free consultation today!">
+    <meta name="keywords" content="learn English, English teaching, English courses, iSpeak, online English, business English">
+
+    <!-- External Libraries -->
+    <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Custom Stylesheet -->
+    <link rel="stylesheet" href="styles.css">
+
+    <!-- Favicon (replace with your own) -->
+    <link rel="icon" type="image/png" href="https://placehold.co/32x32/00a896/ffffff?text=iS">
+</head>
+<body>
+
+    <!-- Header & Navigation -->
+    <header class="header">
+        <div class="container">
+            <nav class="main-nav">
+                <a href="#" class="logo">iSpeak</a>
+                <ul class="nav-menu">
+                    <li><a href="#about" data-key="navAbout">About Me</a></li>
+                    <li><a href="#courses" data-key="navCourses">Courses</a></li>
+                    <li><a href="#process" data-key="navProcess">How It Works</a></li>
+                    <li><a href="#testimonials" data-key="navTestimonials">Testimonials</a></li>
+                    <li><a href="#contact" data-key="navContact">Contact</a></li>
+                </ul>
+                <div class="nav-controls">
+                    <div class="lang-switcher">
+                        <button class="lang-btn" data-lang="en">EN</button>
+                        <button class="lang-btn" data-lang="pl">PL</button>
+                    </div>
+                    <a href="#contact" class="btn btn-primary nav-btn" data-key="navGetStarted">Get Started</a>
+                    <button class="hamburger">
+                        <i class="fas fa-bars"></i>
+                    </button>
+                </div>
+            </nav>
+        </div>
+    </header>
+
+    <main>
+        <!-- Hero Section -->
+        <section class="hero">
+            <div class="container" data-aos="fade-in">
+                <h1 data-key="heroTitle">Unlock Your English Potential.</h1>
+                <p class="subtitle" data-key="heroSubtitle">Personalized, engaging, and effective online English lessons designed for you.</p>
+                <a href="#courses" class="btn btn-primary btn-large" data-key="heroBtnCourses">Explore Courses</a>
+                <a href="#contact" class="btn btn-secondary btn-large" data-key="heroBtnConsultation">Book a Free Consultation</a>
+            </div>
+        </section>
+
+        <!-- About Us Section -->
+        <section id="about" class="about-section">
+            <div class="container">
+                <div class="section-header" data-aos="fade-up">
+                    <h2 data-key="aboutHeader">Welcome to iSpeak</h2>
+                    <p data-key="aboutSubheader">Where fluency meets confidence.</p>
+                </div>
+                <div class="about-content" data-aos="fade-up" data-aos-delay="200">
+                    <!-- SVG Graphic replaces the stock photo -->
+                    <div class="about-graphic">
+                        <svg width="100%" viewBox="0 0 200 150" xmlns="http://www.w3.org/2000/svg">
+                            <defs>
+                                <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
+                                    <stop offset="0%" style="stop-color:#02C39A;stop-opacity:1" />
+                                    <stop offset="100%" style="stop-color:#00A896;stop-opacity:1" />
+                                </linearGradient>
+                            </defs>
+                            <path d="M 10 75 Q 50 10, 90 75 T 170 75" stroke="url(#grad1)" stroke-width="5" fill="none" stroke-linecap="round"/>
+                            <circle cx="10" cy="75" r="8" fill="var(--primary-color)"/>
+                            <circle cx="90" cy="75" r="8" fill="var(--secondary-color)"/>
+                            <circle cx="170" cy="75" r="8" fill="var(--primary-color)"/>
+                            <rect x="50" y="100" width="100" height="8" rx="4" fill="#E0E0E0"/>
+                            <rect x="30" y="120" width="140" height="8" rx="4" fill="#E0E0E0"/>
+                        </svg>
+                    </div>
+                    <div class="about-text">
+                        <h3 data-key="aboutPhilosophyTitle">My Philosophy</h3>
+                        <p data-key="aboutPhilosophyP1">At iSpeak, I believe that learning a language is about more than just grammar and vocabulary; it's about communication, connection, and culture. My mission is to provide a supportive and dynamic learning environment where students feel empowered to speak English confidently in any situation.</p>
+                        <p data-key="aboutPhilosophyP2">As a certified instructor, I use modern, interactive methods to create lesson plans tailored to your specific goals, whether you're learning for travel, career advancement, or personal enrichment.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Courses Section -->
+        <section id="courses" class="courses-section">
+            <div class="container">
+                <div class="section-header" data-aos="fade-up">
+                    <h2 data-key="coursesHeader">My Courses</h2>
+                    <p data-key="coursesSubheader">Find the perfect plan to achieve your language goals.</p>
+                </div>
+                <div class="courses-grid">
+                    <div class="course-card" data-aos="fade-up" data-aos-delay="100">
+                        <i class="fas fa-user-friends card-icon"></i>
+                        <h3 data-key="course1Title">General English</h3>
+                        <p data-key="course1Desc">Improve your speaking, listening, reading, and writing skills for everyday communication. Perfect for all levels.</p>
+                    </div>
+                    <div class="course-card" data-aos="fade-up" data-aos-delay="200">
+                        <i class="fas fa-briefcase card-icon"></i>
+                        <h3 data-key="course2Title">Business English</h3>
+                        <p data-key="course2Desc">Master the language of the professional world, from presentations and negotiations to emails and reports.</p>
+                    </div>
+                    <div class="course-card" data-aos="fade-up" data-aos-delay="300">
+                        <i class="fas fa-graduation-cap card-icon"></i>
+                        <h3 data-key="course3Title">Exam Preparation</h3>
+                        <p data-key="course3Desc">Get ready for standardized tests like IELTS, TOEFL, and Cambridge exams with targeted strategies and practice.</p>
+                    </div>
+                    <div class="course-card" data-aos="fade-up" data-aos-delay="400">
+                        <i class="fas fa-comments card-icon"></i>
+                        <h3 data-key="course4Title">Conversation Practice</h3>
+                        <p data-key="course4Desc">Build fluency and confidence in a relaxed, conversational setting with a native-speaking tutor.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- How It Works Section -->
+        <section id="process" class="process-section">
+            <div class="container">
+                <div class="section-header" data-aos="fade-up">
+                    <h2 data-key="processHeader">Start Your Journey in 3 Simple Steps</h2>
+                </div>
+                <div class="process-steps">
+                    <div class="step" data-aos="fade-right">
+                        <div class="step-number">1</div>
+                        <div class="step-content">
+                            <h3 data-key="step1Title">Free Consultation</h3>
+                            <p data-key="step1Desc">Book a free 20-minute video call to discuss your goals, assess your current level, and meet me, your potential teacher.</p>
+                        </div>
+                    </div>
+                    <div class="step" data-aos="fade-up">
+                        <div class="step-number">2</div>
+                        <div class="step-content">
+                            <h3 data-key="step2Title">Personalized Plan</h3>
+                            <p data-key="step2Desc">I'll create a custom learning plan with materials and a schedule that fits your needs and lifestyle perfectly.</p>
+                        </div>
+                    </div>
+                    <div class="step" data-aos="fade-left">
+                        <div class="step-number">3</div>
+                        <div class="step-content">
+                            <h3 data-key="step3Title">Start Learning</h3>
+                            <p data-key="step3Desc">Begin your interactive online lessons and track your progress as you become a more confident English speaker.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Testimonials Section -->
+        <section id="testimonials" class="testimonials-section">
+            <div class="container">
+                <div class="section-header" data-aos="fade-up">
+                    <h2 data-key="testimonialsHeader">What My Students Say</h2>
+                </div>
+                <div class="testimonials-grid">
+                    <div class="testimonial-card" data-aos="zoom-in">
+                        <p>"Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat."</p>
+                        <div class="testimonial-author">
+                            <i class="fas fa-user-circle testimonial-avatar"></i>
+                            <span data-key="testimonial1Author">- Student A</span>
+                        </div>
+                    </div>
+                    <div class="testimonial-card" data-aos="zoom-in" data-aos-delay="200">
+                        <p>"Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum."</p>
+                        <div class="testimonial-author">
+                            <i class="fas fa-user-circle testimonial-avatar"></i>
+                            <span data-key="testimonial2Author">- Student B</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Contact Section -->
+        <section id="contact" class="contact-section">
+            <div class="container">
+                <div class="section-header" data-aos="fade-up">
+                    <h2 data-key="contactHeader">Ready to Begin?</h2>
+                    <p data-key="contactSubheader">Send me a message to book your free consultation or ask any questions.</p>
+                </div>
+                <div class="contact-form-container" data-aos="fade-up" data-aos-delay="200">
+                    <form name="contact" method="POST" data-netlify="true">
+                        <div class="form-group">
+                            <input type="text" id="name" name="name" required data-key="formNamePlaceholder">
+                            <input type="email" id="email" name="email" required data-key="formEmailPlaceholder">
+                        </div>
+                        <div class="form-group">
+                            <select id="interest" name="interest">
+                                <option value="" disabled selected data-key="formInterestDefault">I'm interested in...</option>
+                                <option value="General English" data-key="formInterestOption1">General English</option>
+                                <option value="Business English" data-key="formInterestOption2">Business English</option>
+                                <option value="Exam Preparation" data-key="formInterestOption3">Exam Preparation</option>
+                                <option value="Other" data-key="formInterestOption4">Other/Not Sure</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <textarea id="message" name="message" rows="5" required data-key="formMessagePlaceholder"></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-submit" data-key="formSubmitBtn">Send Message</button>
+                    </form>
+                </div>
+            </div>
+        </section>
+    </main>
+    
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-about">
+                    <a href="#" class="logo">iSpeak</a>
+                    <p data-key="footerSlogan">Confidence in every conversation.</p>
+                </div>
+                <div class="footer-links">
+                    <h4 data-key="footerLinksTitle">Quick Links</h4>
+                    <ul>
+                        <li><a href="#about" data-key="footerLinkAbout">About</a></li>
+                        <li><a href="#courses" data-key="footerLinkCourses">Courses</a></li>
+                        <li><a href="#contact" data-key="footerLinkContact">Contact</a></li>
+                        <li><a href="#" data-key="footerLinkPrivacy">Privacy Policy</a></li>
+                    </ul>
+                </div>
+                <div class="footer-social">
+                    <h4 data-key="footerSocialTitle">Follow Me</h4>
+                    <a href="#" aria-label="Facebook"><i class="fab fa-facebook-f"></i></a>
+                    <a href="#" aria-label="LinkedIn"><i class="fab fa-linkedin-in"></i></a>
+                    <a href="#" aria-label="Instagram"><i class="fab fa-instagram"></i></a>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2023 iSpeak. <span data-key="footerRights">All Rights Reserved.</span></p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
