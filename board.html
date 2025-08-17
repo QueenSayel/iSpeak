@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>iSpeak - Shared Board Prototype</title>
+    <!-- Basic styles to make the board fill the entire screen -->
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            width: 100%;
+            overflow: hidden; /* Prevent scrolling */
+        }
+        #tldraw-container {
+            position: fixed;
+            inset: 0;
+        }
+    </style>
+</head>
+<body>
+    <!-- The container where the tldraw app will be rendered -->
+    <div id="tldraw-container"></div>
+
+    <!-- 1. We need React and ReactDOM to run tldraw -->
+    <script src="https://unpkg.com/react@17/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@17/umd/react-dom.development.js"></script>
+
+    <!-- 2. We need Babel to use JSX syntax (<Tldraw />) in the browser directly -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- 3. The tldraw library itself -->
+    <script src="https://unpkg.com/@tldraw/tldraw@1.24.2/dist/tldraw.js"></script>
+
+    <!-- 4. Our script to start the application -->
+    <script type="text/babel">
+        // Get the Tldraw component from the global tldraw object
+        const { Tldraw } = tldraw;
+
+        // Render the Tldraw component into our container
+        ReactDOM.render(
+            <Tldraw />,
+            document.getElementById('tldraw-container')
+        );
+    </script>
+</body>
+</html>
