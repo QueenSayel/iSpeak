@@ -8,28 +8,69 @@
       height: 100%;
       margin: 0;
     }
+    #toolbar {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      z-index: 10;
+      background: rgba(255, 255, 255, 0.9);
+      padding: 5px;
+      border-radius: 5px;
+      display: flex;
+      gap: 5px;
+    }
+    button {
+      padding: 5px 10px;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
+  <div id="toolbar">
+    <button id="addSticky">Add Sticky Note</button>
+  </div>
   <div id="root"></div>
 
-  <!-- React and ReactDOM -->
   <script type="module">
-    import React from 'https://esm.sh/react@18.2.0';
-    import ReactDOM from 'https://esm.sh/react-dom@18.2.0';
-    import { Tldraw, TldrawApp, useTldrawApp } from 'https://esm.sh/@tldraw/tldraw@3.15.1';
+    import React from 'https://cdn.skypack.dev/react@18.2.0';
+    import ReactDOM from 'https://cdn.skypack.dev/react-dom@18.2.0';
+    import { Tldraw, useTldrawApp } from 'https://cdn.skypack.dev/@tldraw/tldraw@3.15.1';
 
-    const App = () => {
-      const app = useTldrawApp(); // gives access to the board programmatically
-      return (
-        <div style={{ width: '100%', height: '100%' }}>
-          <Tldraw />
-        </div>
-      );
+    // Wrapper to access TldrawApp instance
+    const Board = () => {
+      const app = useTldrawApp();
+
+      // Expose function to add sticky notes
+      window.addStickyNote = () => {
+        if (!app) return;
+        app.createShapes([
+          {
+            id: `sticky-${Date.now()}`,
+            type: 'note',
+            parentId: 'page',
+            x: 100 + Math.random() * 200,
+            y: 100 + Math.random() * 200,
+            text: 'New note',
+            props: { color: 'yellow' },
+            rotation: 0,
+            style: {},
+          },
+        ]);
+      };
+
+      return React.createElement(Tldraw, { showPages: true, showTools: true, showUI: true });
     };
 
-    ReactDOM.render(<App />, document.getElementById('root'));
+    const App = () => React.createElement('div', { style: { width: '100%', height: '100%' } },
+      React.createElement(Board)
+    );
+
+    ReactDOM.render(React.createElement(App), document.getElementById('root'));
+
+    // Connect toolbar button
+    document.getElementById('addSticky').addEventListener('click', () => {
+      window.addStickyNote();
+    });
   </script>
 </body>
 </html>
-
