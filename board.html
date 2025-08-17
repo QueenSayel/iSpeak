@@ -5,39 +5,254 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Interactive Canvas Board (Fabric.js)</title>
     <!-- Your existing styles are perfect and remain unchanged -->
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        body { background: linear-gradient(135deg, #1a2a6c, #b21f1f, #1a2a6c); height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
-        .header { background: rgba(0, 0, 0, 0.7); color: white; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #00c6ff; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4); }
-        .header h1 { font-size: 1.8rem; background: linear-gradient(to right, #00c6ff, #0072ff); -webkit-background-clip: text; background-clip: text; color: transparent; font-weight: 700; }
-        .header p { font-size: 0.9rem; opacity: 0.8; }
-        .container { display: flex; flex: 1; padding: 15px; gap: 15px; overflow: hidden; }
-        .toolbar { background: rgba(0, 0, 0, 0.8); border-radius: 12px; padding: 20px 15px; width: 250px; display: flex; flex-direction: column; gap: 20px; box-shadow: 0 5px 20px rgba(0, 0, 0, 0.5); border: 1px solid #0072ff; }
-        .tool-section { background: rgba(30, 30, 50, 0.9); border-radius: 10px; padding: 15px; border: 1px solid #00c6ff; }
-        .tool-section h2 { color: #00c6ff; font-size: 1.2rem; margin-bottom: 15px; text-align: center; padding-bottom: 8px; border-bottom: 1px solid rgba(0, 198, 255, 0.3); }
-        .tools { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
-        .tool { background: rgba(20, 20, 40, 0.9); border: 2px solid #0072ff; border-radius: 8px; color: white; padding: 12px 5px; text-align: center; cursor: pointer; transition: all 0.2s ease; display: flex; flex-direction: column; align-items: center; gap: 5px; }
-        .tool:hover { background: rgba(0, 114, 255, 0.3); transform: translateY(-2px); border-color: #00c6ff; }
-        .tool.active { background: rgba(0, 114, 255, 0.5); border-color: #00c6ff; box-shadow: 0 0 15px rgba(0, 198, 255, 0.5); }
-        .tool i { font-size: 1.5rem; margin-bottom: 5px; }
-        .properties { display: flex; flex-direction: column; gap: 15px; }
-        .property-group { display: flex; flex-direction: column; gap: 8px; }
-        .property-group label { color: #00c6ff; font-size: 0.9rem; }
-        .property-group input, .property-group select { background: rgba(20, 20, 40, 0.9); border: 1px solid #0072ff; border-radius: 5px; padding: 8px; color: white; }
-        .color-preview { width: 30px; height: 30px; border-radius: 50%; border: 2px solid white; cursor: pointer; }
-        .canvas-container { flex: 1; background: rgba(0, 0, 0, 0.7); border-radius: 12px; overflow: hidden; position: relative; box-shadow: 0 5px 20px rgba(0, 0, 0, 0.6); border: 1px solid #0072ff; }
-        /* Fabric.js requires a wrapper div for its canvas element */
-        .canvas-wrapper { width: 100%; height: 100%; }
-        #board { background: #1e1e2e; } /* Fabric will manage the cursor */
-        .status-bar { background: rgba(0, 0, 0, 0.7); color: #00c6ff; padding: 8px 15px; font-size: 0.9rem; display: flex; justify-content: space-between; border-top: 2px solid #00c6ff; }
-        .instructions { background: rgba(0, 0, 0, 0.8); border-radius: 10px; padding: 15px; margin-top: auto; border: 1px solid #00c6ff; }
-        .instructions h3 { color: #00c6ff; margin-bottom: 10px; }
-        .instructions ul { padding-left: 20px; color: #a0a0ff; font-size: 0.9rem; }
-        .instructions li { margin-bottom: 5px; }
-        .zoom-controls { position: absolute; bottom: 20px; right: 20px; display: flex; flex-direction: column; gap: 10px; z-index: 10; }
-        .zoom-btn { width: 40px; height: 40px; background: rgba(0, 0, 0, 0.8); border: 2px solid #0072ff; border-radius: 50%; color: white; font-size: 1.2rem; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s ease; }
-        .zoom-btn:hover { background: rgba(0, 114, 255, 0.5); transform: scale(1.1); border-color: #00c6ff; }
-    </style>
+<style>
+    * { 
+        margin: 0; 
+        padding: 0; 
+        box-sizing: border-box; 
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+    }
+
+    body { 
+        background: #f5f7fa; /* light, almost-white background */
+        height: 100vh; 
+        overflow: hidden; 
+        display: flex; 
+        flex-direction: column; 
+        color: #333;
+    }
+
+    .header { 
+        background: rgba(255, 255, 255, 0.95); 
+        color: #333; 
+        padding: 15px 20px; 
+        display: flex; 
+        justify-content: space-between; 
+        align-items: center; 
+        border-bottom: 2px solid #4facfe; 
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08); 
+        border-radius: 0 0 12px 12px;
+    }
+
+    .header h1 { 
+        font-size: 1.8rem; 
+        background: linear-gradient(to right, #43e97b, #38f9d7); 
+        -webkit-background-clip: text; 
+        background-clip: text; 
+        color: transparent; 
+        font-weight: 700; 
+    }
+
+    .header p { 
+        font-size: 0.9rem; 
+        opacity: 0.7; 
+    }
+
+    .container { 
+        display: flex; 
+        flex: 1; 
+        padding: 20px; 
+        gap: 20px; 
+        overflow: hidden; 
+    }
+
+    .toolbar { 
+        background: #ffffff; 
+        border-radius: 16px; 
+        padding: 25px 20px; 
+        width: 260px; 
+        display: flex; 
+        flex-direction: column; 
+        gap: 25px; 
+        box-shadow: 0 5px 25px rgba(0, 0, 0, 0.05); 
+        border: 1px solid #43e97b; 
+    }
+
+    .tool-section { 
+        background: #f9faff; 
+        border-radius: 12px; 
+        padding: 20px; 
+        border: 1px solid #38f9d7; 
+        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+
+    .tool-section h2 { 
+        color: #38f9d7; 
+        font-size: 1.2rem; 
+        margin-bottom: 15px; 
+        text-align: center; 
+        padding-bottom: 8px; 
+        border-bottom: 1px solid rgba(56, 249, 215, 0.3); 
+    }
+
+    .tools { 
+        display: grid; 
+        grid-template-columns: repeat(2, 1fr); 
+        gap: 12px; 
+    }
+
+    .tool { 
+        background: #f0fcff; 
+        border: 2px solid #43e97b; 
+        border-radius: 10px; 
+        color: #333; 
+        padding: 12px 5px; 
+        text-align: center; 
+        cursor: pointer; 
+        transition: all 0.2s ease; 
+        display: flex; 
+        flex-direction: column; 
+        align-items: center; 
+        gap: 5px; 
+    }
+
+    .tool:hover { 
+        background: #e0f7f4; 
+        transform: translateY(-2px); 
+        border-color: #38f9d7; 
+    }
+
+    .tool.active { 
+        background: #c8fff9; 
+        border-color: #43e97b; 
+        box-shadow: 0 0 12px rgba(56, 249, 215, 0.3); 
+    }
+
+    .tool i { 
+        font-size: 1.5rem; 
+        margin-bottom: 5px; 
+        color: #38f9d7;
+    }
+
+    .properties { 
+        display: flex; 
+        flex-direction: column; 
+        gap: 15px; 
+    }
+
+    .property-group { 
+        display: flex; 
+        flex-direction: column; 
+        gap: 8px; 
+    }
+
+    .property-group label { 
+        color: #38f9d7; 
+        font-size: 0.9rem; 
+    }
+
+    .property-group input, 
+    .property-group select { 
+        background: #f0fcff; 
+        border: 1px solid #43e97b; 
+        border-radius: 6px; 
+        padding: 8px; 
+        color: #333; 
+        transition: all 0.2s ease;
+    }
+
+    .property-group input:focus, 
+    .property-group select:focus { 
+        border-color: #38f9d7; 
+        box-shadow: 0 0 5px rgba(56, 249, 215, 0.4); 
+        outline: none;
+    }
+
+    .color-preview { 
+        width: 30px; 
+        height: 30px; 
+        border-radius: 50%; 
+        border: 2px solid #43e97b; 
+        cursor: pointer; 
+    }
+
+    .canvas-container { 
+        flex: 1; 
+        background: #ffffff; 
+        border-radius: 16px; 
+        overflow: hidden; 
+        position: relative; 
+        box-shadow: 0 5px 25px rgba(0, 0, 0, 0.05); 
+        border: 1px solid #43e97b; 
+    }
+
+    .canvas-wrapper { 
+        width: 100%; 
+        height: 100%; 
+    }
+
+    #board { 
+        background: #f9faff; 
+    }
+
+    .status-bar { 
+        background: rgba(255, 255, 255, 0.95); 
+        color: #38f9d7; 
+        padding: 10px 15px; 
+        font-size: 0.9rem; 
+        display: flex; 
+        justify-content: space-between; 
+        border-top: 2px solid #43e97b; 
+        border-radius: 0 0 12px 12px;
+    }
+
+    .instructions { 
+        background: rgba(255, 255, 255, 0.95); 
+        border-radius: 12px; 
+        padding: 15px; 
+        margin-top: auto; 
+        border: 1px solid #38f9d7; 
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    }
+
+    .instructions h3 { 
+        color: #38f9d7; 
+        margin-bottom: 10px; 
+    }
+
+    .instructions ul { 
+        padding-left: 20px; 
+        color: #43e97b; 
+        font-size: 0.9rem; 
+    }
+
+    .instructions li { 
+        margin-bottom: 5px; 
+    }
+
+    .zoom-controls { 
+        position: absolute; 
+        bottom: 20px; 
+        right: 20px; 
+        display: flex; 
+        flex-direction: column; 
+        gap: 10px; 
+        z-index: 10; 
+    }
+
+    .zoom-btn { 
+        width: 40px; 
+        height: 40px; 
+        background: rgba(255, 255, 255, 0.95); 
+        border: 2px solid #43e97b; 
+        border-radius: 50%; 
+        color: #38f9d7; 
+        font-size: 1.2rem; 
+        display: flex; 
+        align-items: center; 
+        justify-content: center; 
+        cursor: pointer; 
+        transition: all 0.2s ease; 
+    }
+
+    .zoom-btn:hover { 
+        background: #e0f7f4; 
+        transform: scale(1.1); 
+        border-color: #38f9d7; 
+    }
+</style>
+
+
 </head>
 <body>
     <div class="header">
@@ -129,7 +344,7 @@
             const canvas = new fabric.Canvas('board', {
                 width: canvasContainer.clientWidth,
                 height: canvasContainer.clientHeight,
-                backgroundColor: '#1e1e2e',
+                backgroundColor: '#FFFFFF',
                 fireRightClick: true, // Enable right click events
                 stopContextMenu: true, // Prevent context menu
             });
