@@ -13,6 +13,7 @@ document.addEventListener('DOMContentLoaded', () => {
             navProcess: "How It Works",
             navTestimonials: "Testimonials",
             navContact: "Contact",
+            navBoard: "Board",
             navGetStarted: "Get Started",
 
             // Hero Section
@@ -88,6 +89,7 @@ document.addEventListener('DOMContentLoaded', () => {
             navProcess: "Jak to działa",
             navTestimonials: "Opinie",
             navContact: "Kontakt",
+            navBoard: "Tablica",
             navGetStarted: "Zacznij",
 
             // Hero Section
@@ -264,4 +266,5 @@ document.addEventListener('DOMContentLoaded', () => {
     // Load saved language or default to English
     const savedLang = localStorage.getItem('iSpeakLang') || 'en';
     setLanguage(savedLang);
+
 });
