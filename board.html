@@ -4,14 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>iSpeak - Shared Board Prototype</title>
-    <!-- Basic styles to make the board fill the entire screen -->
     <style>
         html, body {
             margin: 0;
             padding: 0;
             height: 100%;
             width: 100%;
-            overflow: hidden; /* Prevent scrolling */
+            overflow: hidden;
         }
         #tldraw-container {
             position: fixed;
@@ -20,14 +19,13 @@
     </style>
 </head>
 <body>
-    <!-- The container where the tldraw app will be rendered -->
     <div id="tldraw-container"></div>
 
-    <!-- 1. We need React and ReactDOM to run tldraw -->
+    <!-- 1. React and ReactDOM -->
     <script src="https://unpkg.com/react@17/umd/react.development.js"></script>
     <script src="https://unpkg.com/react-dom@17/umd/react-dom.development.js"></script>
 
-    <!-- 2. We need Babel to use JSX syntax (<Tldraw />) in the browser directly -->
+    <!-- 2. Babel -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     
     <!-- 3. The tldraw library itself -->
@@ -35,14 +33,47 @@
 
     <!-- 4. Our script to start the application -->
     <script type="text/babel">
-        // Get the Tldraw component from the global tldraw object
-        const { Tldraw } = tldraw;
+        // --- FIX STARTS HERE ---
 
-        // Render the Tldraw component into our container
-        ReactDOM.render(
-            <Tldraw />,
-            document.getElementById('tldraw-container')
-        );
+        // We wrap our code in a function so we can call it exactly when we want.
+        function initializeBoard() {
+            // Get the Tldraw component from the global tldraw object.
+            // This line will now work because this function will only be called
+            // after the tldraw library is loaded.
+            const { Tldraw } = tldraw;
+
+            // Render the Tldraw component into our container
+            ReactDOM.render(
+                <Tldraw />,
+                document.getElementById('tldraw-container')
+            );
+        }
+
+        // We wait for the page to be fully ready before running our function.
+        // This solves the race condition.
+        document.addEventListener('DOMContentLoaded', initializeBoard);
+
+        // --- FIX ENDS HERE ---
     </script>
 </body>
-</html>
+</html>```
+
+---
+
+### Optional Fix: Add a Favicon to `index.html`
+
+To get rid of the `favicon.ico 404` error and give your site a professional touch, add the following line inside the `<head>` section of your **`index.html`** file. It will use the same placeholder we used before.
+
+```html
+<!-- Inside index.html, in the <head> section -->
+<head>
+    ...
+    <!-- Custom Stylesheet -->
+    <link rel="stylesheet" href="styles.css">
+
+    <!-- Favicon (replace with your own) -->
+    <link rel="icon" type="image/png" href="https://placehold.co/32x32/00a896/ffffff?text=iS">
+
+    <!-- ADD THIS LINE to fix the 404 error -->
+    <link rel="shortcut icon" href="https://placehold.co/32x32/00a896/ffffff?text=iS">
+</head>
