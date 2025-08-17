@@ -1,59 +1,29 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>iSpeak - Shared Board Prototype</title>
-    <style>
-        html, body {
-            margin: 0;
-            padding: 0;
-            height: 100%;
-            width: 100%;
-            overflow: hidden;
-        }
-        #tldraw-container {
-            position: fixed;
-            inset: 0;
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>tldraw v3 via CDN</title>
+  <link rel="stylesheet" href="https://esm.sh/tldraw@3.15.1/tldraw.css" />
+  <style>
+    html, body { margin: 0; height: 100%; }
+    #app { position: fixed; inset: 0; }
+  </style>
 </head>
 <body>
-    <div id="tldraw-container"></div>
+  <div id="app"></div>
 
-    <!-- 1. React and ReactDOM -->
-    <script src="https://unpkg.com/react@17/umd/react.development.js"></script>
-    <script src="https://unpkg.com/react-dom@17/umd/react-dom.development.js"></script>
+  <script type="module">
+    import React from "https://esm.sh/react@18.3.1";
+    import ReactDOM from "https://esm.sh/react-dom@18.3.1/client";
+    import { Tldraw } from "https://esm.sh/tldraw@3.15.1?external=react,react-dom";
 
-    <!-- 2. Babel -->
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    
-    <!-- 3. The tldraw library itself -->
-    <script src="https://unpkg.com/@tldraw/tldraw@1.24.2/dist/tldraw.js"></script>
-
-    <!-- 4. Our script to start the application -->
-    <script type="text/babel">
-        // --- FIX STARTS HERE ---
-
-        // We wrap our code in a function so we can call it exactly when we want.
-        function initializeBoard() {
-            // Get the Tldraw component from the global tldraw object.
-            // This line will now work because this function will only be called
-            // after the tldraw library is loaded.
-            const { Tldraw } = tldraw;
-
-            // Render the Tldraw component into our container
-            ReactDOM.render(
-                <Tldraw />,
-                document.getElementById('tldraw-container')
-            );
-        }
-
-        // We wait for the page to be fully ready before running our function.
-        // This solves the race condition.
-        document.addEventListener('DOMContentLoaded', initializeBoard);
-
-        // --- FIX ENDS HERE ---
-    </script>
+    const root = ReactDOM.createRoot(document.getElementById("app"));
+    root.render(
+      React.createElement("div", { style: { position: "fixed", inset: 0 } },
+        React.createElement(Tldraw, null)
+      )
+    );
+  </script>
 </body>
 </html>
