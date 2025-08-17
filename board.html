@@ -3,49 +3,323 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>iSpeak - Shared Board Prototype (Modern)</title>
+    <title>Interactive Canvas Board (Fabric.js)</title>
+    <!-- Your existing styles are perfect and remain unchanged -->
     <style>
-        /* Basic styles to make the board fill the screen */
-        html, body {
-            margin: 0;
-            padding: 0;
-            height: 100%;
-            width: 100%;
-            overflow: hidden;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background: linear-gradient(135deg, #1a2a6c, #b21f1f, #1a2a6c); height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
+        .header { background: rgba(0, 0, 0, 0.7); color: white; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #00c6ff; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4); }
+        .header h1 { font-size: 1.8rem; background: linear-gradient(to right, #00c6ff, #0072ff); -webkit-background-clip: text; background-clip: text; color: transparent; font-weight: 700; }
+        .header p { font-size: 0.9rem; opacity: 0.8; }
+        .container { display: flex; flex: 1; padding: 15px; gap: 15px; overflow: hidden; }
+        .toolbar { background: rgba(0, 0, 0, 0.8); border-radius: 12px; padding: 20px 15px; width: 250px; display: flex; flex-direction: column; gap: 20px; box-shadow: 0 5px 20px rgba(0, 0, 0, 0.5); border: 1px solid #0072ff; }
+        .tool-section { background: rgba(30, 30, 50, 0.9); border-radius: 10px; padding: 15px; border: 1px solid #00c6ff; }
+        .tool-section h2 { color: #00c6ff; font-size: 1.2rem; margin-bottom: 15px; text-align: center; padding-bottom: 8px; border-bottom: 1px solid rgba(0, 198, 255, 0.3); }
+        .tools { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+        .tool { background: rgba(20, 20, 40, 0.9); border: 2px solid #0072ff; border-radius: 8px; color: white; padding: 12px 5px; text-align: center; cursor: pointer; transition: all 0.2s ease; display: flex; flex-direction: column; align-items: center; gap: 5px; }
+        .tool:hover { background: rgba(0, 114, 255, 0.3); transform: translateY(-2px); border-color: #00c6ff; }
+        .tool.active { background: rgba(0, 114, 255, 0.5); border-color: #00c6ff; box-shadow: 0 0 15px rgba(0, 198, 255, 0.5); }
+        .tool i { font-size: 1.5rem; margin-bottom: 5px; }
+        .properties { display: flex; flex-direction: column; gap: 15px; }
+        .property-group { display: flex; flex-direction: column; gap: 8px; }
+        .property-group label { color: #00c6ff; font-size: 0.9rem; }
+        .property-group input, .property-group select { background: rgba(20, 20, 40, 0.9); border: 1px solid #0072ff; border-radius: 5px; padding: 8px; color: white; }
+        .color-preview { width: 30px; height: 30px; border-radius: 50%; border: 2px solid white; cursor: pointer; }
+        .canvas-container { flex: 1; background: rgba(0, 0, 0, 0.7); border-radius: 12px; overflow: hidden; position: relative; box-shadow: 0 5px 20px rgba(0, 0, 0, 0.6); border: 1px solid #0072ff; }
+        /* Fabric.js requires a wrapper div for its canvas element */
+        .canvas-wrapper { width: 100%; height: 100%; }
+        #board { background: #1e1e2e; } /* Fabric will manage the cursor */
+        .status-bar { background: rgba(0, 0, 0, 0.7); color: #00c6ff; padding: 8px 15px; font-size: 0.9rem; display: flex; justify-content: space-between; border-top: 2px solid #00c6ff; }
+        .instructions { background: rgba(0, 0, 0, 0.8); border-radius: 10px; padding: 15px; margin-top: auto; border: 1px solid #00c6ff; }
+        .instructions h3 { color: #00c6ff; margin-bottom: 10px; }
+        .instructions ul { padding-left: 20px; color: #a0a0ff; font-size: 0.9rem; }
+        .instructions li { margin-bottom: 5px; }
+        .zoom-controls { position: absolute; bottom: 20px; right: 20px; display: flex; flex-direction: column; gap: 10px; z-index: 10; }
+        .zoom-btn { width: 40px; height: 40px; background: rgba(0, 0, 0, 0.8); border: 2px solid #0072ff; border-radius: 50%; color: white; font-size: 1.2rem; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s ease; }
+        .zoom-btn:hover { background: rgba(0, 114, 255, 0.5); transform: scale(1.1); border-color: #00c6ff; }
     </style>
 </head>
 <body>
-    <!-- The container element where the board will be rendered -->
-    <div id="tldraw-container" style="position: fixed; inset: 0;"></div>
+    <div class="header">
+        <h1>Interactive Canvas Board</h1>
+        <p>iSpeak.com.pl</p>
+    </div>
+    
+    <div class="container">
+        <div class="toolbar">
+             <div class="tool-section">
+                <h2>Tools</h2>
+                <div class="tools">
+                    <div class="tool active" data-tool="pan"><i>✋</i><span>Pan/Select</span></div>
+                    <div class="tool" data-tool="text"><i>T</i><span>Text</span></div>
+                    <div class="tool" data-tool="rectangle"><i>▭</i><span>Rectangle</span></div>
+                    <div class="tool" data-tool="circle"><i>●</i><span>Circle</span></div>
+                    <div class="tool" data-tool="line"><i>─</i><span>Line</span></div>
+                    <div class="tool" data-tool="arrow"><i>→</i><span>Arrow</span></div>
+                </div>
+            </div>
+            
+            <div class="tool-section properties">
+                <h2>Properties</h2>
+                <div class="property-group">
+                    <label>Text Content</label>
+                    <input type="text" id="text-content" placeholder="Enter text" value="Sample Text">
+                </div>
+                <div class="property-group">
+                    <label>Font Size</label>
+                    <select id="font-size">
+                        <option value="14">Small</option><option value="20" selected>Medium</option><option value="28">Large</option><option value="36">X-Large</option>
+                    </select>
+                </div>
+                <div class="property-group">
+                    <label>Fill Color</label>
+                    <input type="color" id="fill-color-picker" value="#0072ff" style="display:none;">
+                    <div class="color-preview" id="fill-color" style="background: #0072ff;"></div>
+                </div>
+                <div class="property-group">
+                    <label>Stroke Color</label>
+                    <input type="color" id="stroke-color-picker" value="#00c6ff" style="display:none;">
+                    <div class="color-preview" id="stroke-color" style="background: #00c6ff;"></div>
+                </div>
+                <div class="property-group">
+                    <label>Stroke Width</label>
+                    <select id="stroke-width">
+                        <option value="1">Thin</option><option value="2" selected>Medium</option><option value="4">Thick</option><option value="6">X-Thick</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="tool-section instructions">
+                <h3>How to Use</h3>
+                <ul>
+                    <li><strong>Pan</strong>: Hold Spacebar + Drag</li>
+                    <li><strong>Zoom</strong>: Use mouse wheel</li>
+                    <li><strong>Add element</strong>: Select tool and click on canvas</li>
+                    <li><strong>Move/Resize</strong>: Use Pan/Select tool</li>
+                    <li><strong>Delete element</strong>: Select and press Delete key</li>
+                </ul>
+            </div>
+        </div>
+        
+        <div class="canvas-container">
+            <div class="canvas-wrapper">
+                <canvas id="board"></canvas>
+            </div>
+            <div class="zoom-controls">
+                <div class="zoom-btn" id="zoom-in">+</div>
+                <div class="zoom-btn" id="zoom-out">-</div>
+                <div class="zoom-btn" id="reset-view">↺</div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="status-bar">
+        <div>Current Tool: <span id="current-tool">Pan/Select</span></div>
+        <div>Zoom: <span id="zoom-level">100%</span></div>
+        <div>Elements: <span id="element-count">0</span></div>
+    </div>
 
-    <!-- 1. Load Modern React (v18) and ReactDOM -->
-    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <!-- 1. ADD FABRIC.JS LIBRARY FROM CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
 
-    <!-- 2. Load the Modern tldraw UMD bundle (v2) -->
-    <!-- This bundle contains all necessary JS and CSS for the editor -->
-    <script src="https://unpkg.com/@tldraw/tldraw@2.1.4/dist/tldraw.umd.js"></script>
-
-    <!-- 3. Our script to initialize the application -->
+    <!-- 2. REPLACE YOUR SCRIPT WITH THIS -->
     <script>
-        function initializeBoard() {
-            // Get a reference to the container element
-            const container = document.getElementById('tldraw-container');
+        document.addEventListener('DOMContentLoaded', () => {
+            const canvasContainer = document.querySelector('.canvas-wrapper');
+            const canvas = new fabric.Canvas('board', {
+                width: canvasContainer.clientWidth,
+                height: canvasContainer.clientHeight,
+                backgroundColor: '#1e1e2e',
+                fireRightClick: true, // Enable right click events
+                stopContextMenu: true, // Prevent context menu
+            });
 
-            // 1. Create a React root in the container using the modern API
-            const root = ReactDOM.createRoot(container);
+            // --- STATE MANAGEMENT ---
+            let currentTool = 'pan';
+            let isPanning = false;
 
-            // 2. The tldraw UMD bundle exposes its main component on the global `Tldraw` object.
-            // We use React.createElement to create an instance of it.
-            const tldrawComponent = React.createElement(Tldraw.Tldraw);
+            // --- UI ELEMENT REFERENCES ---
+            const ui = {
+                tools: document.querySelectorAll('.tool'),
+                zoomInBtn: document.getElementById('zoom-in'),
+                zoomOutBtn: document.getElementById('zoom-out'),
+                resetViewBtn: document.getElementById('reset-view'),
+                fillColorPreview: document.getElementById('fill-color'),
+                strokeColorPreview: document.getElementById('stroke-color'),
+                fillColorPicker: document.getElementById('fill-color-picker'),
+                strokeColorPicker: document.getElementById('stroke-color-picker'),
+                textContentInput: document.getElementById('text-content'),
+                fontSizeSelect: document.getElementById('font-size'),
+                strokeWidthSelect: document.getElementById('stroke-width'),
+                currentToolDisplay: document.getElementById('current-tool'),
+                zoomLevelDisplay: document.getElementById('zoom-level'),
+                elementCountDisplay: document.getElementById('element-count'),
+            };
 
-            // 3. Render the component to the root
-            root.render(tldrawComponent);
-        }
+            // --- CANVAS RESIZING ---
+            const resizeCanvas = () => {
+                canvas.setWidth(canvasContainer.clientWidth);
+                canvas.setHeight(canvasContainer.clientHeight);
+                canvas.renderAll();
+            };
+            window.addEventListener('resize', resizeCanvas);
 
-        // Run the initialization function once the window has loaded
-        window.addEventListener('load', initializeBoard);
+            // --- TOOL SELECTION ---
+            const setActiveTool = (tool) => {
+                currentTool = tool;
+                canvas.isDrawingMode = false; // Turn off free drawing mode
+                canvas.selection = tool === 'pan'; // Allow object selection only in pan mode
+                canvas.defaultCursor = tool === 'pan' ? 'default' : 'crosshair';
+                
+                ui.tools.forEach(t => t.classList.remove('active'));
+                document.querySelector(`.tool[data-tool="${tool}"]`).classList.add('active');
+                updateStatusBar();
+            };
+            
+            ui.tools.forEach(tool => {
+                tool.addEventListener('click', () => setActiveTool(tool.dataset.tool));
+            });
+
+            // --- PANNING & ZOOMING ---
+            canvas.on('mouse:wheel', function(opt) {
+                const delta = opt.e.deltaY;
+                let zoom = canvas.getZoom();
+                zoom *= 0.999 ** delta;
+                if (zoom > 20) zoom = 20;
+                if (zoom < 0.1) zoom = 0.1;
+                canvas.zoomToPoint({ x: opt.e.offsetX, y: opt.e.offsetY }, zoom);
+                opt.e.preventDefault();
+                opt.e.stopPropagation();
+                updateStatusBar();
+            });
+
+            canvas.on('mouse:down', function(opt) {
+                if (opt.e.altKey === true || currentTool === 'pan-drag') { // Panning with Alt key
+                    isPanning = true;
+                    canvas.selection = false;
+                    this.setCursor('grabbing');
+                } else if (currentTool !== 'pan') {
+                    createObject(opt.pointer);
+                }
+            });
+
+            canvas.on('mouse:move', function(opt) {
+                if (isPanning) {
+                    const delta = new fabric.Point(opt.e.movementX, opt.e.movementY);
+                    canvas.relativePan(delta);
+                }
+            });
+
+            canvas.on('mouse:up', function(opt) {
+                isPanning = false;
+                canvas.selection = (currentTool === 'pan');
+                this.setCursor(canvas.defaultCursor);
+            });
+            
+            // Allow panning via Spacebar as well
+            window.addEventListener('keydown', (e) => {
+                if(e.code === "Space" && currentTool === 'pan') {
+                     setActiveTool('pan-drag');
+                     canvas.setCursor('grab');
+                }
+            });
+             window.addEventListener('keyup', (e) => {
+                if(e.code === "Space") {
+                    if (currentTool === 'pan-drag') setActiveTool('pan');
+                    canvas.setCursor('default');
+                }
+            });
+
+
+            // --- OBJECT CREATION ---
+            const createObject = (pointer) => {
+                const props = {
+                    left: pointer.x,
+                    top: pointer.y,
+                    fill: ui.fillColorPicker.value,
+                    stroke: ui.strokeColorPicker.value,
+                    strokeWidth: parseInt(ui.strokeWidthSelect.value, 10),
+                };
+
+                let shape;
+                switch (currentTool) {
+                    case 'rectangle':
+                        shape = new fabric.Rect({ ...props, width: 80, height: 50 });
+                        break;
+                    case 'circle':
+                        shape = new fabric.Circle({ ...props, radius: 40 });
+                        break;
+                    case 'text':
+                        shape = new fabric.IText(ui.textContentInput.value, { ...props, fontSize: parseInt(ui.fontSizeSelect.value, 10) });
+                        break;
+                    case 'line':
+                        shape = new fabric.Line([pointer.x, pointer.y, pointer.x + 100, pointer.y], { ...props });
+                        break;
+                    case 'arrow':
+                        // Fabric doesn't have a native arrow, so we create a group
+                        const line = new fabric.Line([pointer.x, pointer.y, pointer.x + 100, pointer.y], { ...props, stroke: props.stroke });
+                        const arrowhead = new fabric.Triangle({
+                            left: pointer.x + 100, top: pointer.y,
+                            originX: 'center', originY: 'center',
+                            angle: 90, width: 10, height: 10, fill: props.stroke
+                        });
+                        shape = new fabric.Group([line, arrowhead], { left: pointer.x, top: pointer.y });
+                        break;
+                }
+                
+                if (shape) {
+                    canvas.add(shape);
+                    setActiveTool('pan'); // Switch back to select tool after creating
+                }
+            };
+            
+            // --- DELETING OBJECTS ---
+             window.addEventListener('keydown', (e) => {
+                if (e.key === 'Delete' || e.key === 'Backspace') {
+                    const activeObjects = canvas.getActiveObjects();
+                    if (activeObjects.length) {
+                        activeObjects.forEach(obj => canvas.remove(obj));
+                        canvas.discardActiveObject().renderAll();
+                    }
+                }
+            });
+            
+            // --- ZOOM BUTTONS ---
+            const zoom = (factor) => {
+                const newZoom = canvas.getZoom() * factor;
+                canvas.zoomToPoint(new fabric.Point(canvas.width / 2, canvas.height / 2), newZoom);
+                updateStatusBar();
+            };
+            ui.zoomInBtn.addEventListener('click', () => zoom(1.2));
+            ui.zoomOutBtn.addEventListener('click', () => zoom(1/1.2));
+            ui.resetViewBtn.addEventListener('click', () => {
+                canvas.setViewportTransform([1,0,0,1,0,0]);
+                updateStatusBar();
+            });
+
+            // --- COLOR PICKER UI ---
+            ui.fillColorPreview.addEventListener('click', () => ui.fillColorPicker.click());
+            ui.strokeColorPreview.addEventListener('click', () => ui.strokeColorPicker.click());
+            ui.fillColorPicker.addEventListener('input', (e) => ui.fillColorPreview.style.backgroundColor = e.target.value);
+            ui.strokeColorPicker.addEventListener('input', (e) => ui.strokeColorPreview.style.backgroundColor = e.target.value);
+
+            // --- STATUS BAR & EVENTS ---
+            const updateStatusBar = () => {
+                ui.currentToolDisplay.textContent = document.querySelector('.tool.active span').textContent;
+                ui.zoomLevelDisplay.textContent = `${Math.round(canvas.getZoom() * 100)}%`;
+                ui.elementCountDisplay.textContent = canvas.getObjects().length;
+            };
+
+            canvas.on('object:added', updateStatusBar);
+            canvas.on('object:removed', updateStatusBar);
+
+            // --- INITIALIZATION ---
+            // Add sample objects
+            canvas.add(new fabric.IText('Welcome to iSpeak!', { left: 50, top: 50, fontSize: 28, fill: '#00c6ff' }));
+            
+            setActiveTool('pan'); // Set initial tool
+            resizeCanvas(); // Initial size
+        });
     </script>
 </body>
 </html>
