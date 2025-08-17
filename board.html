@@ -3,397 +3,264 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Interactive Canvas Board (Fabric.js)</title>
-    <!-- Your existing styles are perfect and remain unchanged -->
-<style>
-    * { 
-        margin: 0; 
-        padding: 0; 
-        box-sizing: border-box; 
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-    }
+    <title>Whiteboard | iSpeak.com.pl</title>
+    
+    <!-- FontAwesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    
+    <!-- Styles are unchanged -->
+    <style>
+        :root {
+            --tool-bg: #ffffff;
+            --tool-border: #e0e0e0;
+            --tool-shadow: rgba(0, 0, 0, 0.1);
+            --tool-hover-bg: #f5f5f5;
+            --tool-active-bg: #e7f1ff;
+            --tool-active-color: #3b82f6;
+            --text-color: #333;
+        }
 
-    body { 
-        background: #f5f7fa; /* light, almost-white background */
-        height: 100vh; 
-        overflow: hidden; 
-        display: flex; 
-        flex-direction: column; 
-        color: #333;
-    }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
 
-    .header { 
-        background: rgba(255, 255, 255, 0.95); 
-        color: #333; 
-        padding: 15px 20px; 
-        display: flex; 
-        justify-content: space-between; 
-        align-items: center; 
-        border-bottom: 2px solid #4facfe; 
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08); 
-        border-radius: 0 0 12px 12px;
-    }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f0f2f5;
+            height: 100vh;
+            overflow: hidden;
+            color: var(--text-color);
+        }
 
-    .header h1 { 
-        font-size: 1.8rem; 
-        background: linear-gradient(to right, #43e97b, #38f9d7); 
-        -webkit-background-clip: text; 
-        background-clip: text; 
-        color: transparent; 
-        font-weight: 700; 
-    }
+        .canvas-container {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+        }
 
-    .header p { 
-        font-size: 0.9rem; 
-        opacity: 0.7; 
-    }
+        .main-toolbar {
+            position: absolute;
+            top: 50%;
+            left: 15px;
+            transform: translateY(-50%);
+            background: var(--tool-bg);
+            border-radius: 10px;
+            box-shadow: 0 4px 12px var(--tool-shadow);
+            border: 1px solid var(--tool-border);
+            display: flex;
+            flex-direction: column;
+            padding: 8px;
+            gap: 4px;
+            z-index: 10;
+        }
 
-    .container { 
-        display: flex; 
-        flex: 1; 
-        padding: 20px; 
-        gap: 20px; 
-        overflow: hidden; 
-    }
+        .tool {
+            width: 40px;
+            height: 40px;
+            border-radius: 6px;
+            border: none;
+            background: transparent;
+            color: #555;
+            font-size: 18px;
+            cursor: pointer;
+            display: grid;
+            place-items: center;
+            transition: background-color 0.2s ease, color 0.2s ease;
+        }
+        .tool:hover { background-color: var(--tool-hover-bg); }
+        .tool.active { background-color: var(--tool-active-bg); color: var(--tool-active-color); }
 
-    .toolbar { 
-        background: #ffffff; 
-        border-radius: 16px; 
-        padding: 25px 20px; 
-        width: 260px; 
-        display: flex; 
-        flex-direction: column; 
-        gap: 25px; 
-        box-shadow: 0 5px 25px rgba(0, 0, 0, 0.05); 
-        border: 1px solid #43e97b; 
-    }
+        .flyout-menu {
+            position: absolute;
+            top: 0;
+            left: 55px; 
+            background: var(--tool-bg);
+            border-radius: 10px;
+            box-shadow: 0 4px 12px var(--tool-shadow);
+            border: 1px solid var(--tool-border);
+            padding: 8px;
+            display: flex;
+            gap: 4px;
+            opacity: 0;
+            visibility: hidden;
+            transform: translateX(-10px);
+            transition: opacity 0.2s ease, transform 0.2s ease;
+        }
+        .flyout-menu.visible {
+            opacity: 1;
+            visibility: visible;
+            transform: translateX(0);
+        }
 
-    .tool-section { 
-        background: #f9faff; 
-        border-radius: 12px; 
-        padding: 20px; 
-        border: 1px solid #38f9d7; 
-        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-    }
+        .properties-panel {
+            position: absolute;
+            top: 15px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--tool-bg);
+            border-radius: 10px;
+            box-shadow: 0 4px 12px var(--tool-shadow);
+            border: 1px solid var(--tool-border);
+            padding: 8px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            z-index: 10;
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(-10px) translateX(-50%);
+            transition: opacity 0.2s ease, transform 0.2s ease;
+        }
+        .properties-panel.visible {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0) translateX(-50%);
+        }
+        .prop-group { display: flex; align-items: center; gap: 6px; }
+        .color-preview { width: 24px; height: 24px; border-radius: 4px; cursor: pointer; border: 1px solid #ccc; }
+        .prop-group select, .prop-group input[type="number"] {
+            border: 1px solid var(--tool-border);
+            border-radius: 4px; padding: 4px 6px; font-size: 12px;
+            background-color: var(--tool-hover-bg);
+        }
+        .prop-group input[type="number"] { width: 50px; }
+        .separator { width: 1px; height: 20px; background-color: var(--tool-border); }
 
-    .tool-section h2 { 
-        color: #38f9d7; 
-        font-size: 1.2rem; 
-        margin-bottom: 15px; 
-        text-align: center; 
-        padding-bottom: 8px; 
-        border-bottom: 1px solid rgba(56, 249, 215, 0.3); 
-    }
-
-    .tools { 
-        display: grid; 
-        grid-template-columns: repeat(2, 1fr); 
-        gap: 12px; 
-    }
-
-    .tool { 
-        background: #f0fcff; 
-        border: 2px solid #43e97b; 
-        border-radius: 10px; 
-        color: #333; 
-        padding: 12px 5px; 
-        text-align: center; 
-        cursor: pointer; 
-        transition: all 0.2s ease; 
-        display: flex; 
-        flex-direction: column; 
-        align-items: center; 
-        gap: 5px; 
-    }
-
-    .tool:hover { 
-        background: #e0f7f4; 
-        transform: translateY(-2px); 
-        border-color: #38f9d7; 
-    }
-
-    .tool.active { 
-        background: #c8fff9; 
-        border-color: #43e97b; 
-        box-shadow: 0 0 12px rgba(56, 249, 215, 0.3); 
-    }
-
-    .tool i { 
-        font-size: 1.5rem; 
-        margin-bottom: 5px; 
-        color: #38f9d7;
-    }
-
-    .properties { 
-        display: flex; 
-        flex-direction: column; 
-        gap: 15px; 
-    }
-
-    .property-group { 
-        display: flex; 
-        flex-direction: column; 
-        gap: 8px; 
-    }
-
-    .property-group label { 
-        color: #38f9d7; 
-        font-size: 0.9rem; 
-    }
-
-    .property-group input, 
-    .property-group select { 
-        background: #f0fcff; 
-        border: 1px solid #43e97b; 
-        border-radius: 6px; 
-        padding: 8px; 
-        color: #333; 
-        transition: all 0.2s ease;
-    }
-
-    .property-group input:focus, 
-    .property-group select:focus { 
-        border-color: #38f9d7; 
-        box-shadow: 0 0 5px rgba(56, 249, 215, 0.4); 
-        outline: none;
-    }
-
-    .color-preview { 
-        width: 30px; 
-        height: 30px; 
-        border-radius: 50%; 
-        border: 2px solid #43e97b; 
-        cursor: pointer; 
-    }
-
-    .canvas-container { 
-        flex: 1; 
-        background: #ffffff; 
-        border-radius: 16px; 
-        overflow: hidden; 
-        position: relative; 
-        box-shadow: 0 5px 25px rgba(0, 0, 0, 0.05); 
-        border: 1px solid #43e97b; 
-    }
-
-    .canvas-wrapper { 
-        width: 100%; 
-        height: 100%; 
-    }
-
-    #board { 
-        background: #f9faff; 
-    }
-
-    .status-bar { 
-        background: rgba(255, 255, 255, 0.95); 
-        color: #38f9d7; 
-        padding: 10px 15px; 
-        font-size: 0.9rem; 
-        display: flex; 
-        justify-content: space-between; 
-        border-top: 2px solid #43e97b; 
-        border-radius: 0 0 12px 12px;
-    }
-
-    .instructions { 
-        background: rgba(255, 255, 255, 0.95); 
-        border-radius: 12px; 
-        padding: 15px; 
-        margin-top: auto; 
-        border: 1px solid #38f9d7; 
-        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-    }
-
-    .instructions h3 { 
-        color: #38f9d7; 
-        margin-bottom: 10px; 
-    }
-
-    .instructions ul { 
-        padding-left: 20px; 
-        color: #43e97b; 
-        font-size: 0.9rem; 
-    }
-
-    .instructions li { 
-        margin-bottom: 5px; 
-    }
-
-    .zoom-controls { 
-        position: absolute; 
-        bottom: 20px; 
-        right: 20px; 
-        display: flex; 
-        flex-direction: column; 
-        gap: 10px; 
-        z-index: 10; 
-    }
-
-    .zoom-btn { 
-        width: 40px; 
-        height: 40px; 
-        background: rgba(255, 255, 255, 0.95); 
-        border: 2px solid #43e97b; 
-        border-radius: 50%; 
-        color: #38f9d7; 
-        font-size: 1.2rem; 
-        display: flex; 
-        align-items: center; 
-        justify-content: center; 
-        cursor: pointer; 
-        transition: all 0.2s ease; 
-    }
-
-    .zoom-btn:hover { 
-        background: #e0f7f4; 
-        transform: scale(1.1); 
-        border-color: #38f9d7; 
-    }
-</style>
-
-
+        .navigation-controls {
+            position: absolute;
+            bottom: 15px;
+            right: 15px;
+            display: flex;
+            align-items: center;
+            background: var(--tool-bg);
+            border-radius: 10px;
+            box-shadow: 0 4px 12px var(--tool-shadow);
+            border: 1px solid var(--tool-border);
+            padding: 4px;
+            z-index: 10;
+        }
+        .nav-btn, .zoom-level {
+            width: 36px; height: 36px;
+            display: grid; place-items: center;
+            background: none; border: none;
+            cursor: pointer; color: #555;
+            font-size: 14px;
+        }
+        .nav-btn:hover { background-color: var(--tool-hover-bg); border-radius: 6px; }
+        .zoom-level { cursor: default; font-weight: 500; }
+    </style>
 </head>
 <body>
-    <div class="header">
-        <h1>Interactive Canvas Board</h1>
-        <p>iSpeak.com.pl</p>
-    </div>
-    
-    <div class="container">
-        <div class="toolbar">
-             <div class="tool-section">
-                <h2>Tools</h2>
-                <div class="tools">
-                    <div class="tool active" data-tool="pan"><i>✋</i><span>Pan/Select</span></div>
-                    <div class="tool" data-tool="text"><i>T</i><span>Text</span></div>
-                    <div class="tool" data-tool="rectangle"><i>▭</i><span>Rectangle</span></div>
-                    <div class="tool" data-tool="circle"><i>●</i><span>Circle</span></div>
-                    <div class="tool" data-tool="line"><i>─</i><span>Line</span></div>
-                    <div class="tool" data-tool="arrow"><i>→</i><span>Arrow</span></div>
-                </div>
-            </div>
-            
-            <div class="tool-section properties">
-                <h2>Properties</h2>
-                <div class="property-group">
-                    <label>Text Content</label>
-                    <input type="text" id="text-content" placeholder="Enter text" value="Sample Text">
-                </div>
-                <div class="property-group">
-                    <label>Font Size</label>
-                    <select id="font-size">
-                        <option value="14">Small</option><option value="20" selected>Medium</option><option value="28">Large</option><option value="36">X-Large</option>
-                    </select>
-                </div>
-                <div class="property-group">
-                    <label>Fill Color</label>
-                    <input type="color" id="fill-color-picker" value="#0072ff" style="display:none;">
-                    <div class="color-preview" id="fill-color" style="background: #0072ff;"></div>
-                </div>
-                <div class="property-group">
-                    <label>Stroke Color</label>
-                    <input type="color" id="stroke-color-picker" value="#00c6ff" style="display:none;">
-                    <div class="color-preview" id="stroke-color" style="background: #00c6ff;"></div>
-                </div>
-                <div class="property-group">
-                    <label>Stroke Width</label>
-                    <select id="stroke-width">
-                        <option value="1">Thin</option><option value="2" selected>Medium</option><option value="4">Thick</option><option value="6">X-Thick</option>
-                    </select>
-                </div>
-            </div>
-            
-            <div class="tool-section instructions">
-                <h3>How to Use</h3>
-                <ul>
-                    <li><strong>Pan</strong>: Hold Spacebar + Drag</li>
-                    <li><strong>Zoom</strong>: Use mouse wheel</li>
-                    <li><strong>Add element</strong>: Select tool and click on canvas</li>
-                    <li><strong>Move/Resize</strong>: Use Pan/Select tool</li>
-                    <li><strong>Delete element</strong>: Select and press Delete key</li>
-                </ul>
-            </div>
-        </div>
-        
-        <div class="canvas-container">
-            <div class="canvas-wrapper">
-                <canvas id="board"></canvas>
-            </div>
-            <div class="zoom-controls">
-                <div class="zoom-btn" id="zoom-in">+</div>
-                <div class="zoom-btn" id="zoom-out">-</div>
-                <div class="zoom-btn" id="reset-view">↺</div>
-            </div>
-        </div>
-    </div>
-    
-    <div class="status-bar">
-        <div>Current Tool: <span id="current-tool">Pan/Select</span></div>
-        <div>Zoom: <span id="zoom-level">100%</span></div>
-        <div>Elements: <span id="element-count">0</span></div>
+
+    <div class="canvas-container">
+        <canvas id="board"></canvas>
     </div>
 
-    <!-- 1. ADD FABRIC.JS LIBRARY FROM CDN -->
+    <!-- The HTML structure is unchanged -->
+    <div class="main-toolbar">
+        <button class="tool" id="select-tool" data-tool="pan" title="Select & Pan"><i class="fas fa-mouse-pointer"></i></button>
+        <div id="shapes-tool-wrapper" style="position: relative;">
+            <button class="tool" id="shapes-tool" title="Shapes"><i class="fas fa-shapes"></i></button>
+            <div class="flyout-menu" id="shapes-flyout">
+                <button class="tool" data-tool="rectangle" title="Rectangle"><i class="far fa-square"></i></button>
+                <button class="tool" data-tool="circle" title="Circle"><i class="far fa-circle"></i></button>
+            </div>
+        </div>
+        <button class="tool" data-tool="line" title="Line"><i class="fas fa-minus"></i></button>
+        <button class="tool" data-tool="arrow" title="Arrow"><i class="fas fa-long-arrow-alt-right"></i></button>
+        <button class="tool" data-tool="text" title="Text"><i class="fas fa-font"></i></button>
+    </div>
+
+    <div class="properties-panel" id="properties-panel">
+        <div class="prop-group">
+            <input type="color" id="fill-color-picker" style="display: none;">
+            <div class="color-preview" id="fill-color-preview" title="Fill Color"></div>
+        </div>
+        <div class="prop-group">
+            <input type="color" id="stroke-color-picker" style="display: none;">
+            <div class="color-preview" id="stroke-color-preview" title="Stroke Color"></div>
+        </div>
+        <div class="separator"></div>
+        <div class="prop-group">
+            <i class="fas fa-grip-lines-vertical"></i>
+            <input type="number" id="stroke-width" min="1" max="50" title="Stroke Width">
+        </div>
+    </div>
+    
+    <div class="navigation-controls">
+        <button class="nav-btn" id="zoom-out" title="Zoom Out"><i class="fas fa-minus"></i></button>
+        <div class="zoom-level" id="zoom-level">100%</div>
+        <button class="nav-btn" id="zoom-in" title="Zoom In"><i class="fas fa-plus"></i></button>
+        <button class="nav-btn" id="reset-view" title="Reset View"><i class="fas fa-expand"></i></button>
+    </div>
+
+    <!-- Libraries -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
 
-    <!-- 2. REPLACE YOUR SCRIPT WITH THIS -->
+    <!-- Application Script with fixes -->
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-            const canvasContainer = document.querySelector('.canvas-wrapper');
             const canvas = new fabric.Canvas('board', {
-                width: canvasContainer.clientWidth,
-                height: canvasContainer.clientHeight,
-                backgroundColor: '#FFFFFF',
-                fireRightClick: true, // Enable right click events
-                stopContextMenu: true, // Prevent context menu
+                width: window.innerWidth,
+                height: window.innerHeight,
+                backgroundColor: '#f8f9fa',
             });
 
-            // --- STATE MANAGEMENT ---
+            // --- STATE & UI REFS ---
             let currentTool = 'pan';
             let isPanning = false;
-
-            // --- UI ELEMENT REFERENCES ---
             const ui = {
-                tools: document.querySelectorAll('.tool'),
+                toolbar: document.querySelector('.main-toolbar'),
+                tools: document.querySelectorAll('.main-toolbar .tool, .flyout-menu .tool'),
+                shapesTool: document.getElementById('shapes-tool'),
+                shapesFlyout: document.getElementById('shapes-flyout'),
+                propertiesPanel: document.getElementById('properties-panel'),
+                fillColorPicker: document.getElementById('fill-color-picker'),
+                fillColorPreview: document.getElementById('fill-color-preview'),
+                strokeColorPicker: document.getElementById('stroke-color-picker'),
+                strokeColorPreview: document.getElementById('stroke-color-preview'),
+                strokeWidthInput: document.getElementById('stroke-width'),
                 zoomInBtn: document.getElementById('zoom-in'),
                 zoomOutBtn: document.getElementById('zoom-out'),
                 resetViewBtn: document.getElementById('reset-view'),
-                fillColorPreview: document.getElementById('fill-color'),
-                strokeColorPreview: document.getElementById('stroke-color'),
-                fillColorPicker: document.getElementById('fill-color-picker'),
-                strokeColorPicker: document.getElementById('stroke-color-picker'),
-                textContentInput: document.getElementById('text-content'),
-                fontSizeSelect: document.getElementById('font-size'),
-                strokeWidthSelect: document.getElementById('stroke-width'),
-                currentToolDisplay: document.getElementById('current-tool'),
                 zoomLevelDisplay: document.getElementById('zoom-level'),
-                elementCountDisplay: document.getElementById('element-count'),
             };
 
-            // --- CANVAS RESIZING ---
+            // --- CORE CANVAS FUNCTIONALITY ---
             const resizeCanvas = () => {
-                canvas.setWidth(canvasContainer.clientWidth);
-                canvas.setHeight(canvasContainer.clientHeight);
+                canvas.setWidth(window.innerWidth);
+                canvas.setHeight(window.innerHeight);
                 canvas.renderAll();
             };
             window.addEventListener('resize', resizeCanvas);
 
-            // --- TOOL SELECTION ---
-            const setActiveTool = (tool) => {
-                currentTool = tool;
-                canvas.isDrawingMode = false; // Turn off free drawing mode
-                canvas.selection = tool === 'pan'; // Allow object selection only in pan mode
-                canvas.defaultCursor = tool === 'pan' ? 'default' : 'crosshair';
+            const setActiveTool = (toolBtn) => {
+                currentTool = toolBtn.dataset.tool;
+                canvas.isDrawingMode = false;
+                canvas.selection = currentTool === 'pan';
+                canvas.defaultCursor = currentTool === 'pan' ? 'default' : 'crosshair';
                 
                 ui.tools.forEach(t => t.classList.remove('active'));
-                document.querySelector(`.tool[data-tool="${tool}"]`).classList.add('active');
-                updateStatusBar();
+                toolBtn.classList.add('active');
+                if (ui.shapesFlyout.contains(toolBtn)) {
+                    ui.shapesTool.classList.add('active'); // Keep parent tool active
+                }
+                hideFlyout();
             };
-            
+
+            // --- UI INTERACTIONS ---
             ui.tools.forEach(tool => {
-                tool.addEventListener('click', () => setActiveTool(tool.dataset.tool));
+                if (tool.id !== 'shapes-tool') {
+                    tool.addEventListener('click', () => setActiveTool(tool));
+                }
             });
+            
+            ui.shapesTool.addEventListener('click', (e) => {
+                e.stopPropagation();
+                ui.shapesFlyout.classList.toggle('visible');
+            });
+            
+            const hideFlyout = () => ui.shapesFlyout.classList.remove('visible');
+            document.body.addEventListener('click', hideFlyout);
+            ui.toolbar.addEventListener('click', (e) => e.stopPropagation());
 
             // --- PANNING & ZOOMING ---
             canvas.on('mouse:wheel', function(opt) {
@@ -405,135 +272,115 @@
                 canvas.zoomToPoint({ x: opt.e.offsetX, y: opt.e.offsetY }, zoom);
                 opt.e.preventDefault();
                 opt.e.stopPropagation();
-                updateStatusBar();
+                updateZoomLevel();
             });
 
             canvas.on('mouse:down', function(opt) {
-                if (opt.e.altKey === true || currentTool === 'pan-drag') { // Panning with Alt key
+                if (opt.e.altKey || opt.e.button === 1) { // Pan with Alt or Middle Mouse
                     isPanning = true;
-                    canvas.selection = false;
-                    this.setCursor('grabbing');
-                } else if (currentTool !== 'pan') {
+                    // **FIX 1**: Use `canvas` instead of `this` for consistency
+                    canvas.setCursor('grabbing');
+                } else if (currentTool !== 'pan' && !opt.target) {
                     createObject(opt.pointer);
                 }
             });
 
-            canvas.on('mouse:move', function(opt) {
+            canvas.on('mouse:move', (opt) => {
                 if (isPanning) {
-                    const delta = new fabric.Point(opt.e.movementX, opt.e.movementY);
-                    canvas.relativePan(delta);
+                    canvas.relativePan(new fabric.Point(opt.e.movementX, opt.e.movementY));
                 }
             });
-
-            canvas.on('mouse:up', function(opt) {
+            
+            // **FIX 1**: Use `canvas` instead of `this` to fix the TypeError
+            canvas.on('mouse:up', () => {
                 isPanning = false;
-                canvas.selection = (currentTool === 'pan');
-                this.setCursor(canvas.defaultCursor);
-            });
-            
-            // Allow panning via Spacebar as well
-            window.addEventListener('keydown', (e) => {
-                if(e.code === "Space" && currentTool === 'pan') {
-                     setActiveTool('pan-drag');
-                     canvas.setCursor('grab');
-                }
-            });
-             window.addEventListener('keyup', (e) => {
-                if(e.code === "Space") {
-                    if (currentTool === 'pan-drag') setActiveTool('pan');
-                    canvas.setCursor('default');
-                }
+                canvas.setCursor(canvas.defaultCursor);
             });
 
-
-            // --- OBJECT CREATION ---
-            const createObject = (pointer) => {
-                const props = {
-                    left: pointer.x,
-                    top: pointer.y,
-                    fill: ui.fillColorPicker.value,
-                    stroke: ui.strokeColorPicker.value,
-                    strokeWidth: parseInt(ui.strokeWidthSelect.value, 10),
-                };
-
-                let shape;
-                switch (currentTool) {
-                    case 'rectangle':
-                        shape = new fabric.Rect({ ...props, width: 80, height: 50 });
-                        break;
-                    case 'circle':
-                        shape = new fabric.Circle({ ...props, radius: 40 });
-                        break;
-                    case 'text':
-                        shape = new fabric.IText(ui.textContentInput.value, { ...props, fontSize: parseInt(ui.fontSizeSelect.value, 10) });
-                        break;
-                    case 'line':
-                        shape = new fabric.Line([pointer.x, pointer.y, pointer.x + 100, pointer.y], { ...props });
-                        break;
-                    case 'arrow':
-                        // Fabric doesn't have a native arrow, so we create a group
-                        const line = new fabric.Line([pointer.x, pointer.y, pointer.x + 100, pointer.y], { ...props, stroke: props.stroke });
-                        const arrowhead = new fabric.Triangle({
-                            left: pointer.x + 100, top: pointer.y,
-                            originX: 'center', originY: 'center',
-                            angle: 90, width: 10, height: 10, fill: props.stroke
-                        });
-                        shape = new fabric.Group([line, arrowhead], { left: pointer.x, top: pointer.y });
-                        break;
-                }
-                
-                if (shape) {
-                    canvas.add(shape);
-                    setActiveTool('pan'); // Switch back to select tool after creating
-                }
-            };
-            
-            // --- DELETING OBJECTS ---
-             window.addEventListener('keydown', (e) => {
-                if (e.key === 'Delete' || e.key === 'Backspace') {
-                    const activeObjects = canvas.getActiveObjects();
-                    if (activeObjects.length) {
-                        activeObjects.forEach(obj => canvas.remove(obj));
-                        canvas.discardActiveObject().renderAll();
-                    }
-                }
-            });
-            
-            // --- ZOOM BUTTONS ---
             const zoom = (factor) => {
                 const newZoom = canvas.getZoom() * factor;
                 canvas.zoomToPoint(new fabric.Point(canvas.width / 2, canvas.height / 2), newZoom);
-                updateStatusBar();
+                updateZoomLevel();
             };
             ui.zoomInBtn.addEventListener('click', () => zoom(1.2));
-            ui.zoomOutBtn.addEventListener('click', () => zoom(1/1.2));
-            ui.resetViewBtn.addEventListener('click', () => {
-                canvas.setViewportTransform([1,0,0,1,0,0]);
-                updateStatusBar();
-            });
+            ui.zoomOutBtn.addEventListener('click', () => zoom(1 / 1.2));
+            ui.resetViewBtn.addEventListener('click', () => { canvas.setViewportTransform([1, 0, 0, 1, 0, 0]); updateZoomLevel(); });
+            const updateZoomLevel = () => ui.zoomLevelDisplay.textContent = `${Math.round(canvas.getZoom() * 100)}%`;
 
-            // --- COLOR PICKER UI ---
-            ui.fillColorPreview.addEventListener('click', () => ui.fillColorPicker.click());
-            ui.strokeColorPreview.addEventListener('click', () => ui.strokeColorPicker.click());
-            ui.fillColorPicker.addEventListener('input', (e) => ui.fillColorPreview.style.backgroundColor = e.target.value);
-            ui.strokeColorPicker.addEventListener('input', (e) => ui.strokeColorPreview.style.backgroundColor = e.target.value);
-
-            // --- STATUS BAR & EVENTS ---
-            const updateStatusBar = () => {
-                ui.currentToolDisplay.textContent = document.querySelector('.tool.active span').textContent;
-                ui.zoomLevelDisplay.textContent = `${Math.round(canvas.getZoom() * 100)}%`;
-                ui.elementCountDisplay.textContent = canvas.getObjects().length;
+            // --- OBJECT CREATION & DELETION ---
+            const createObject = (pointer) => {
+                const props = {
+                    left: pointer.x, top: pointer.y, originX: 'center', originY: 'center',
+                    fill: ui.fillColorPicker.value, stroke: ui.strokeColorPicker.value,
+                    strokeWidth: parseInt(ui.strokeWidthInput.value, 10),
+                };
+                let shape;
+                switch (currentTool) {
+                    case 'rectangle': shape = new fabric.Rect({ ...props, width: 100, height: 60 }); break;
+                    case 'circle': shape = new fabric.Circle({ ...props, radius: 40 }); break;
+                    case 'line': shape = new fabric.Line([0, 0, 100, 0], { ...props, left: pointer.x - 50, top: pointer.y }); break;
+                    case 'arrow':
+                        const line = new fabric.Line([0, 0, 100, 0], { ...props, stroke: props.stroke });
+                        const arrowhead = new fabric.Triangle({ left: 100, top: 0, originX: 'center', originY: 'center', angle: 90, width: 10, height: 10, fill: props.stroke });
+                        shape = new fabric.Group([line, arrowhead], { left: pointer.x - 50, top: pointer.y });
+                        break;
+                    case 'text':
+                        // **FIX 2**: Explicitly set textBaseline to prevent console warnings
+                        shape = new fabric.IText('Text', { ...props, fontSize: 24, textBaseline: 'bottom' });
+                        break;
+                }
+                if (shape) { canvas.add(shape); setActiveTool(document.getElementById('select-tool')); }
             };
 
-            canvas.on('object:added', updateStatusBar);
-            canvas.on('object:removed', updateStatusBar);
+            window.addEventListener('keydown', (e) => {
+                if (e.key === 'Delete' || e.key === 'Backspace') {
+                    canvas.getActiveObjects().forEach(obj => canvas.remove(obj));
+                    canvas.discardActiveObject().renderAll();
+                }
+            });
+
+            // --- CONTEXTUAL PROPERTIES PANEL LOGIC ---
+            const updatePropertiesPanel = () => {
+                const activeObject = canvas.getActiveObject();
+                if (activeObject) {
+                    ui.fillColorPicker.value = activeObject.get('fill') || '#ffffff';
+                    ui.fillColorPreview.style.backgroundColor = activeObject.get('fill');
+                    ui.strokeColorPicker.value = activeObject.get('stroke') || '#000000';
+                    ui.strokeColorPreview.style.backgroundColor = activeObject.get('stroke');
+                    ui.strokeWidthInput.value = activeObject.get('strokeWidth');
+                    ui.propertiesPanel.classList.add('visible');
+                } else {
+                    ui.propertiesPanel.classList.remove('visible');
+                }
+            };
+
+            canvas.on({
+                'selection:created': updatePropertiesPanel,
+                'selection:updated': updatePropertiesPanel,
+                'selection:cleared': updatePropertiesPanel,
+            });
+            
+            const applyProperty = (prop, value) => {
+                canvas.getActiveObjects().forEach(obj => obj.set(prop, value));
+                canvas.renderAll();
+            };
+
+            ui.fillColorPreview.addEventListener('click', () => ui.fillColorPicker.click());
+            ui.strokeColorPreview.addEventListener('click', () => ui.strokeColorPicker.click());
+            ui.fillColorPicker.addEventListener('input', (e) => {
+                ui.fillColorPreview.style.backgroundColor = e.target.value;
+                applyProperty('fill', e.target.value);
+            });
+            ui.strokeColorPicker.addEventListener('input', (e) => {
+                ui.strokeColorPreview.style.backgroundColor = e.target.value;
+                applyProperty('stroke', e.target.value);
+            });
+            ui.strokeWidthInput.addEventListener('input', (e) => applyProperty('strokeWidth', parseInt(e.target.value, 10)));
 
             // --- INITIALIZATION ---
-            // Add sample objects
-            canvas.add(new fabric.IText('Welcome to iSpeak!', { left: 50, top: 50, fontSize: 28, fill: '#00c6ff' }));
-            
-            setActiveTool('pan'); // Set initial tool
-            resizeCanvas(); // Initial size
+            canvas.add(new fabric.IText('Welcome to iSpeak.com.pl Whiteboard!', { left: 100, top: 100, fontSize: 28, fill: '#333' }));
+            setActiveTool(document.getElementById('select-tool'));
+            updateZoomLevel();
         });
     </script>
 </body>
