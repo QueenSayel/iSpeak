@@ -66,10 +66,21 @@
             let currentTool = 'pan', isPanning = false, isSyncing = false;
 
             // --- REAL-TIME SYNC LOGIC (SUPABASE) ---
-            const debounce = (func, delay) => {
-                let timeout;
-                return (...args) => { clearTimeout(timeout); timeout = setTimeout(() => func.apply(this, args), delay); };
-            };
+			const debounce = (func, delay) => {
+			    let timeout;
+			    
+			    const debounced = (...args) => {
+			        clearTimeout(timeout);
+			        timeout = setTimeout(() => func.apply(this, args), delay);
+			    };
+			
+			    const cancel = () => {
+			        clearTimeout(timeout);
+			    };
+			
+			    // Return both the function and its cancellation method
+			    return [debounced, cancel]; 
+			};
 
 			const saveBoard = async () => {
 				if (isSyncing) return;
@@ -82,7 +93,7 @@
 
 				if (error) console.error('Error saving board:', error);
 			};
-            const debouncedSave = debounce(saveBoard, 1000);
+            const [debouncedSave, cancelSave] = debounce(saveBoard, 1000);
 
             const loadBoard = async () => {
                 const { data, error } = await supabaseClient
@@ -103,25 +114,29 @@
             };
 
 			const listenForUpdates = () => {
-				supabaseClient.channel('board-updates')
-					.on(
-						'postgres_changes',
-						{ event: '*', schema: 'public', table: 'boards', filter: `id=eq.${BOARD_ID}` },
-						(payload) => {
-							// --- THIS IS THE CRITICAL CHECK ---
-							if (payload.new.last_updated_by === CLIENT_ID) {
-								return; // This update was from us, so ignore it.
-							}
-
-							isSyncing = true;
-							const newJson = payload.new.data;
-							canvas.loadFromJSON(newJson, () => {
-								canvas.renderAll();
-								setTimeout(() => { isSyncing = false; }, 200);
-							});
-						}
-					)
-					.subscribe();
+			    supabaseClient.channel('board-updates')
+			        .on(
+			            'postgres_changes',
+			            { event: '*', schema: 'public', table: 'boards', filter: `id=eq.${BOARD_ID}` },
+			            (payload) => {
+			                if (payload.new.last_updated_by === CLIENT_ID) {
+			                    return; // This update was from us, so ignore it.
+			                }
+			
+			                // --- THIS IS THE FIX ---
+			                // An update came from another client.
+			                // Cancel any save operation we had scheduled to avoid overwriting their change.
+			                cancelSave(); 
+			
+			                isSyncing = true;
+			                const newJson = payload.new.data;
+			                canvas.loadFromJSON(newJson, () => {
+			                    canvas.renderAll();
+			                    setTimeout(() => { isSyncing = false; }, 200);
+			                });
+			            }
+			        )
+			        .subscribe();
 			};
             
             // --- EVENT LISTENERS ---
@@ -182,3 +197,4 @@
     </script>
 </body>
 </html>
+
