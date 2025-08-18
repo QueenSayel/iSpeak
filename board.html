@@ -3,181 +3,182 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>tldraw Whiteboard | iSpeak.com.pl</title>
-    <link rel="stylesheet" href="https://unpkg.com/@tldraw/tldraw@2.1.4/tldraw.css">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+    <title>Whiteboard | iSpeak.com.pl</title>
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    
+    <!-- NEW: Supabase Client Library -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
     <style>
-        body, html {
-            margin: 0;
-            padding: 0;
-            height: 100vh;
-            width: 100vw;
-            overflow: hidden;
-        }
-        #root {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-        }
+        /* CSS is unchanged */
+        :root { --tool-bg: #ffffff; --tool-border: #e0e0e0; --tool-shadow: rgba(0, 0, 0, 0.1); --tool-hover-bg: #f5f5f5; --tool-active-bg: #e7f1ff; --tool-active-color: #3b82f6; --text-color: #333; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f0f2f5; height: 100vh; overflow: hidden; color: var(--text-color); }
+        .canvas-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+        .main-toolbar { position: absolute; top: 50%; left: 15px; transform: translateY(-50%); background: var(--tool-bg); border-radius: 10px; box-shadow: 0 4px 12px var(--tool-shadow); border: 1px solid var(--tool-border); display: flex; flex-direction: column; padding: 8px; gap: 4px; z-index: 10; }
+        .tool { width: 40px; height: 40px; border-radius: 6px; border: none; background: transparent; color: #555; font-size: 18px; cursor: pointer; display: grid; place-items: center; transition: background-color 0.2s ease, color 0.2s ease; }
+        .tool:hover { background-color: var(--tool-hover-bg); }
+        .tool.active { background-color: var(--tool-active-bg); color: var(--tool-active-color); }
+        .flyout-menu { position: absolute; top: 0; left: 55px;  background: var(--tool-bg); border-radius: 10px; box-shadow: 0 4px 12px var(--tool-shadow); border: 1px solid var(--tool-border); padding: 8px; display: flex; gap: 4px; opacity: 0; visibility: hidden; transform: translateX(-10px); transition: opacity 0.2s ease, transform 0.2s ease; }
+        .flyout-menu.visible { opacity: 1; visibility: visible; transform: translateX(0); }
+        .properties-panel { position: absolute; top: 15px; left: 50%; transform: translateX(-50%); background: var(--tool-bg); border-radius: 10px; box-shadow: 0 4px 12px var(--tool-shadow); border: 1px solid var(--tool-border); padding: 8px; display: flex; align-items: center; gap: 12px; z-index: 10; opacity: 0; visibility: hidden; transform: translateY(-10px) translateX(-50%); transition: opacity 0.2s ease, transform 0.2s ease; }
+        .properties-panel.visible { opacity: 1; visibility: visible; transform: translateY(0) translateX(-50%); }
+        .prop-group { display: flex; align-items: center; gap: 6px; }
+        .color-preview { width: 24px; height: 24px; border-radius: 4px; cursor: pointer; border: 1px solid #ccc; }
+        .prop-group select, .prop-group input[type="number"] { border: 1px solid var(--tool-border); border-radius: 4px; padding: 4px 6px; font-size: 12px; background-color: var(--tool-hover-bg); }
+        .prop-group input[type="number"] { width: 50px; }
+        .separator { width: 1px; height: 20px; background-color: var(--tool-border); }
+        .navigation-controls { position: absolute; bottom: 15px; right: 15px; display: flex; align-items: center; background: var(--tool-bg); border-radius: 10px; box-shadow: 0 4px 12px var(--tool-shadow); border: 1px solid var(--tool-border); padding: 4px; z-index: 10; }
+        .nav-btn, .zoom-level { width: 36px; height: 36px; display: grid; place-items: center; background: none; border: none; cursor: pointer; color: #555; font-size: 14px; }
+        .nav-btn:hover { background-color: var(--tool-hover-bg); border-radius: 6px; }
+        .zoom-level { cursor: default; font-weight: 500; }
+        .video-modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.8); display: flex; justify-content: center; align-items: center; z-index: 1000; opacity: 0; visibility: hidden; transition: opacity 0.3s ease, visibility 0.3s ease; }
+        .video-modal.visible { opacity: 1; visibility: visible; }
+        .video-modal .video-container { position: relative; width: 80%; max-w: 960px; padding-bottom: 45%; height: 0; }
+        .video-modal iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none; }
+        .video-modal .close-btn { position: absolute; top: 20px; right: 20px; font-size: 30px; color: white; background: none; border: none; cursor: pointer; }
     </style>
 </head>
 <body>
-    <!-- This is where our React app will be rendered -->
-    <div id="root"></div>
+    <div class="canvas-container"><canvas id="board"></canvas></div>
+    <!-- All UI HTML is unchanged -->
+    <div class="main-toolbar"><button class="tool" id="select-tool" data-tool="pan" title="Select & Pan"><i class="fas fa-mouse-pointer"></i></button><div id="shapes-tool-wrapper" style="position: relative;"><button class="tool" id="shapes-tool" title="Shapes"><i class="fas fa-shapes"></i></button><div class="flyout-menu" id="shapes-flyout"><button class="tool" data-tool="rectangle" title="Rectangle"><i class="far fa-square"></i></button><button class="tool" data-tool="circle" title="Circle"><i class="far fa-circle"></i></button></div></div><button class="tool" data-tool="line" title="Line"><i class="fas fa-minus"></i></button><button class="tool" data-tool="arrow" title="Arrow"><i class="fas fa-long-arrow-alt-right"></i></button><button class="tool" data-tool="text" title="Text"><i class="fas fa-font"></i></button></div><div class="properties-panel" id="properties-panel"><div class="prop-group"><input type="color" id="fill-color-picker" style="display: none;"><div class="color-preview" id="fill-color-preview" title="Fill Color"></div></div><div class="prop-group"><input type="color" id="stroke-color-picker" style="display: none;"><div class="color-preview" id="stroke-color-preview" title="Stroke Color"></div></div><div class="separator"></div><div class="prop-group"><i class="fas fa-grip-lines-vertical"></i><input type="number" id="stroke-width" min="1" max="50" title="Stroke Width"></div></div><div class="navigation-controls"><button class="nav-btn" id="zoom-out" title="Zoom Out"><i class="fas fa-minus"></i></button><div class="zoom-level" id="zoom-level">100%</div><button class="nav-btn" id="zoom-in" title="Zoom In"><i class="fas fa-plus"></i></button><button class="nav-btn" id="reset-view" title="Reset View"><i class="fas fa-expand"></i></button></div><div id="video-modal" class="video-modal"><button class="close-btn" id="close-modal-btn">&times;</button><div class="video-container"><iframe id="youtube-iframe" src="" title="YouTube video player" frameborder="0" allow="autoplay; fullscreen" allowfullscreen></iframe></div></div>
 
-    <!-- 1. Supabase Client -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
 
-    <!-- 2. React Libraries -->
-    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+            // --- SUPABASE SETUP ---
+            // 1. Paste your Supabase URL and Anon Key here
+            const SUPABASE_URL = 'https://oysjdtlpmawebbncvnqt.supabase.co';
+            const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im95c2pkdGxwbWF3ZWJibmN2bnF0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU1MzA0NjgsImV4cCI6MjA3MTEwNjQ2OH0.JGJRzRfEJLL0TDhIN9DLnLu0TiuT3YRKU55tRdgtSgE';
+            const BOARD_ID = 'default';
+			const CLIENT_ID = 'client_' + Math.random().toString(36).substring(2, 9);
 
-    <!-- 3. Babel to transpile JSX in the browser -->
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    
-    <!-- 4. tldraw Libraries -->
-    <script src="https://unpkg.com/tldraw@2.1.4"></script>
-    <script src="https://unpkg.com/@tldraw/assets@2.1.0/assets.js"></script>
-    <script src="https://esm.sh/tldraw@2.1.4"></script>
+            // 2. Initialize Supabase client
+            const { createClient } = supabase;
+            const supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
+            
+            // --- CANVAS & UI SETUP ---
+            const canvas = new fabric.Canvas('board', { width: window.innerWidth, height: window.innerHeight, backgroundColor: '#f8f9fa' });
+            let currentTool = 'pan', isPanning = false, isSyncing = false;
 
-    <!-- 5. Our Application Logic (written in JSX) -->
-    <script type="text/babel">
+            // --- REAL-TIME SYNC LOGIC (SUPABASE) ---
+            const debounce = (func, delay) => {
+                let timeout;
+                return (...args) => { clearTimeout(timeout); timeout = setTimeout(() => func.apply(this, args), delay); };
+            };
 
-        // --- SETUP ---
-        const { createClient } = supabase;
-        const { Tldraw, createTLStore, TldrawUi, defaultShapeUtils, Editor, StoreSnapshot, useEditor } = tldraw;
-        
-        // Your Supabase details
-        const SUPABASE_URL = 'https://oysjdtlpmawebbncvnqt.supabase.co';
-        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im95c2pkdGxwbWF3ZWJibmN2bnF0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU1MzA0NjgsImV4cCI6MjA3MTEwNjQ2OH0.JGJRzRfEJLL0TDhIN9DLnLu0TiuT3YRKU55tRdgtSgE';
-        const BOARD_ID = 'default';
-        const CLIENT_ID = 'client_' + Math.random().toString(36).substring(2, 9);
+			const saveBoard = async () => {
+				if (isSyncing) return;
+				const json = canvas.toJSON(['youtubeVideoId', 'lockAspectRatio']);
+				
+				const { error } = await supabaseClient
+					.from('boards')
+					// Add last_updated_by to the upsert payload
+					.upsert({ id: BOARD_ID, data: json, last_updated_by: CLIENT_ID }); 
 
-        const supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
+				if (error) console.error('Error saving board:', error);
+			};
+            const debouncedSave = debounce(saveBoard, 1000);
 
-        // This is our main React Component
-        function App() {
-            // A simple state to hold the tldraw store
-            const [store, setStore] = React.useState(null);
+            const loadBoard = async () => {
+                const { data, error } = await supabaseClient
+                    .from('boards')
+                    .select('data')
+                    .eq('id', BOARD_ID)
+                    .single(); // .single() gets one object, not an array
 
-            // This effect runs once on mount
-            React.useEffect(() => {
-                // 1. Create a new tldraw store
-                const newStore = createTLStore({
-                    shapeUtils: defaultShapeUtils,
-                });
-
-                // 2. Load the initial data from Supabase
-                async function loadInitialData() {
-                    console.log(`[${CLIENT_ID}] Loading initial board state...`);
-                    const { data, error } = await supabaseClient
-                        .from('boards')
-                        .select('data')
-                        .eq('id', BOARD_ID)
-                        .single();
-
-                    if (data && data.data) {
-                        console.log(`[${CLIENT_ID}] Board found, loading snapshot.`);
-                        newStore.loadSnapshot(data.data);
-                    } else {
-                        console.log(`[${CLIENT_ID}] No board found, starting fresh.`);
-                    }
-                    // Set the store in state, which will trigger a re-render
-                    setStore(newStore);
+                if (error && error.code !== 'PGRST116') { // Ignore 'row not found' errors
+                    console.error('Error loading board:', error);
                 }
 
-                loadInitialData();
-            }, []); // Empty dependency array means this runs only once
+                if (data) {
+                    canvas.loadFromJSON(data.data, canvas.renderAll.bind(canvas));
+                } else {
+                    canvas.add(new fabric.IText('Drop an image or YouTube URL here!', { left: 100, top: 100, fontSize: 28, fill: '#333', textBaseline: 'bottom' }));
+                }
+            };
 
-            if (!store) {
-                return <div>Loading...</div>;
-            }
+			const listenForUpdates = () => {
+				supabaseClient.channel('board-updates')
+					.on(
+						'postgres_changes',
+						{ event: '*', schema: 'public', table: 'boards', filter: `id=eq.${BOARD_ID}` },
+						(payload) => {
+							// --- THIS IS THE CRITICAL CHECK ---
+							if (payload.new.last_updated_by === CLIENT_ID) {
+								return; // This update was from us, so ignore it.
+							}
 
-            return (
-                <Tldraw persistenceKey={BOARD_ID} store={store}>
-                    <SupabaseSync />
-                </Tldraw>
-            );
-        }
+							isSyncing = true;
+							const newJson = payload.new.data;
+							canvas.loadFromJSON(newJson, () => {
+								canvas.renderAll();
+								setTimeout(() => { isSyncing = false; }, 200);
+							});
+						}
+					)
+					.subscribe();
+			};
+            
+            // --- EVENT LISTENERS ---
+            canvas.on({ 'object:added': debouncedSave, 'object:removed': debouncedSave, 'object:modified': debouncedSave });
 
-        // This component handles all the real-time logic
-        function SupabaseSync() {
-            const editor = useEditor();
-
-            // This effect handles SAVING local changes to Supabase
-            React.useEffect(() => {
-                const handleChange = (change) => {
-                    // Only save changes made by the user, not by remote updates
-                    if (change.source !== 'user') return;
-                    
-                    const snapshot = editor.store.getSnapshot();
-
-                    // Debounce the save function
-                    const save = async () => {
-                        console.log(`%c[${CLIENT_ID}] SAVING to Supabase...`, 'color: blue;');
-                        await supabaseClient
-                            .from('boards')
-                            .upsert({
-                                id: BOARD_ID,
-                                data: snapshot,
-                                last_updated_by: CLIENT_ID,
+            // --- DRAG & DROP HANDLING (base64) ---
+            window.addEventListener('dragover', (e) => e.preventDefault());
+            window.addEventListener('drop', (e) => {
+                e.preventDefault();
+                const dropPoint = canvas.getPointer(e);
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    Array.from(files).filter(file => file.type.startsWith('image/')).forEach(file => {
+                        const reader = new FileReader();
+                        reader.onload = (f) => {
+                            fabric.Image.fromURL(f.target.result, (img) => {
+                                const maxDim = 400; if (img.width > maxDim || img.height > maxDim) { img.scaleToWidth(maxDim); if (img.getScaledHeight() > maxDim) { img.scaleToHeight(maxDim); }}
+                                img.set({ left: dropPoint.x, top: dropPoint.y, originX: 'center', originY: 'center' });
+                                canvas.add(img).requestRenderAll();
                             });
-                    };
+                        };
+                        reader.readAsDataURL(file);
+                    });
+                    return;
+                }
+                if (e.dataTransfer.types.includes('text/plain')) {
+                    const videoId = parseYouTubeUrl(e.dataTransfer.getData('text/plain'));
+                    if (videoId) createYouTubePlaceholder(videoId, dropPoint);
+                }
+            });
 
-                    // Use a simple timeout as a debounce
-                    const timeoutId = setTimeout(save, 500);
-                    
-                    // Return a cleanup function to cancel the save if a new change comes in
-                    return () => clearTimeout(timeoutId);
-                };
-
-                const cleanup = editor.store.listen(handleChange, {
-                    scope: 'document',
-                    source: 'user',
-                });
-
-                return () => {
-                    cleanup();
-                };
-            }, [editor]);
-
-            // This effect handles RECEIVING remote changes from Supabase
-            React.useEffect(() => {
-                const channel = supabaseClient.channel('board-updates');
-
-                const subscription = channel.on(
-                    'postgres_changes',
-                    { event: '*', schema: 'public', table: 'boards', filter: `id=eq.${BOARD_ID}` },
-                    (payload) => {
-                        const senderId = payload.new.last_updated_by;
-                        
-                        // Ignore our own updates
-                        if (senderId === CLIENT_ID) return;
-                        
-                        console.log(`%c[${CLIENT_ID}] Received foreign update. Loading snapshot.`, 'color: green;');
-                        const newSnapshot = payload.new.data;
-                        
-                        // Load the remote snapshot into our store
-                        // tldraw handles the diffing and re-rendering
-                        editor.store.loadSnapshot(newSnapshot);
-                    }
-                ).subscribe();
-
-                return () => {
-                    supabaseClient.removeChannel(channel);
-                };
-            }, [editor]);
-
-            return null; // This component doesn't render anything
-        }
-
-        // --- Render the App ---
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
-
+            // --- ALL OTHER FUNCTIONS (unchanged) ---
+            const resizeCanvas = () => { canvas.setWidth(window.innerWidth); canvas.setHeight(window.innerHeight); canvas.renderAll(); }; window.addEventListener('resize', resizeCanvas);
+            const setActiveTool = (toolBtn) => { currentTool = toolBtn.dataset.tool; canvas.isDrawingMode = false; canvas.selection = currentTool === 'pan'; canvas.defaultCursor = currentTool === 'pan' ? 'default' : 'crosshair'; document.querySelectorAll('.main-toolbar .tool, .flyout-menu .tool').forEach(t => t.classList.remove('active')); toolBtn.classList.add('active'); if (document.getElementById('shapes-flyout').contains(toolBtn)) document.getElementById('shapes-tool').classList.add('active'); hideFlyout(); };
+            const hideFlyout = () => document.getElementById('shapes-flyout').classList.remove('visible'); document.querySelectorAll('.main-toolbar .tool, .flyout-menu .tool').forEach(tool => { if (tool.id !== 'shapes-tool') tool.addEventListener('click', () => setActiveTool(tool)); }); document.getElementById('shapes-tool').addEventListener('click', (e) => { e.stopPropagation(); document.getElementById('shapes-flyout').classList.toggle('visible'); }); document.body.addEventListener('click', hideFlyout); document.querySelector('.main-toolbar').addEventListener('click', (e) => e.stopPropagation());
+            canvas.on('mouse:wheel', function(opt) { const delta = opt.e.deltaY; let zoom = canvas.getZoom(); zoom *= 0.999 ** delta; if (zoom > 20) zoom = 20; if (zoom < 0.1) zoom = 0.1; canvas.zoomToPoint({ x: opt.e.offsetX, y: opt.e.offsetY }, zoom); opt.e.preventDefault(); opt.e.stopPropagation(); updateZoomLevel(); });
+            canvas.on('mouse:down', function(opt) { if (opt.e.altKey || opt.e.button === 1) { isPanning = true; canvas.setCursor('grabbing'); } else if (currentTool !== 'pan' && !opt.target) { createObject(opt.pointer); } });
+            canvas.on('mouse:move', (opt) => { if (isPanning) canvas.relativePan(new fabric.Point(opt.e.movementX, opt.e.movementY)); });
+            canvas.on('mouse:up', () => { isPanning = false; canvas.setCursor(canvas.defaultCursor); });
+            const updateZoomLevel = () => document.getElementById('zoom-level').textContent = `${Math.round(canvas.getZoom() * 100)}%`;
+            const zoom = (factor) => { canvas.zoomToPoint(new fabric.Point(canvas.width / 2, canvas.height / 2), canvas.getZoom() * factor); updateZoomLevel(); };
+            document.getElementById('zoom-in').addEventListener('click', () => zoom(1.2)); document.getElementById('zoom-out').addEventListener('click', () => zoom(1 / 1.2)); document.getElementById('reset-view').addEventListener('click', () => { canvas.setViewportTransform([1, 0, 0, 1, 0, 0]); updateZoomLevel(); });
+            const createObject = (pointer) => { const props = { left: pointer.x, top: pointer.y, originX: 'center', originY: 'center', fill: document.getElementById('fill-color-picker').value, stroke: document.getElementById('stroke-color-picker').value, strokeWidth: parseInt(document.getElementById('stroke-width').value, 10) }; let shape; switch (currentTool) { case 'rectangle': shape = new fabric.Rect({ ...props, width: 100, height: 60 }); break; case 'circle': shape = new fabric.Circle({ ...props, radius: 40 }); break; case 'line': shape = new fabric.Line([0, 0, 100, 0], { ...props, left: pointer.x - 50, top: pointer.y }); break; case 'arrow': const line = new fabric.Line([0, 0, 100, 0], { ...props, stroke: props.stroke }); const arrowhead = new fabric.Triangle({ left: 100, top: 0, originX: 'center', originY: 'center', angle: 90, width: 10, height: 10, fill: props.stroke }); shape = new fabric.Group([line, arrowhead], { left: pointer.x - 50, top: pointer.y }); break; case 'text': shape = new fabric.IText('Text', { ...props, fontSize: 24, textBaseline: 'bottom' }); break; } if (shape) { canvas.add(shape); setActiveTool(document.getElementById('select-tool')); } };
+            window.addEventListener('keydown', (e) => { if (e.key === 'Delete' || e.key === 'Backspace') { canvas.getActiveObjects().forEach(obj => canvas.remove(obj)); canvas.discardActiveObject().renderAll(); } });
+            const parseYouTubeUrl = (url) => { const match = url.match(/^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/); return (match && match[2].length === 11) ? match[2] : null; };
+            const createYouTubePlaceholder = (videoId, dropPoint) => { fabric.Image.fromURL(`https://img.youtube.com/vi/${videoId}/mqdefault.jpg`, img => { img.scaleToWidth(320); const playIcon = new fabric.Text('►', { fontSize: 80, fill: 'rgba(255, 255, 255, 0.9)', stroke: 'rgba(0, 0, 0, 0.5)', strokeWidth: 1.5, originX: 'center', originY: 'center', textBaseline: 'alphabetic' }); const group = new fabric.Group([img, playIcon], { left: dropPoint.x, top: dropPoint.y, originX: 'center', originY: 'center', youtubeVideoId: videoId, lockAspectRatio: true }); canvas.add(group).setActiveObject(group).requestRenderAll(); }, { crossOrigin: 'anonymous' }); };
+            const videoModal = document.getElementById('video-modal'); canvas.on('mouse:dblclick', (opt) => { if (opt.target && opt.target.youtubeVideoId) { document.getElementById('youtube-iframe').src = `https://www.youtube-nocookie.com/embed/${opt.target.youtubeVideoId}?autoplay=1`; videoModal.classList.add('visible'); } }); document.getElementById('close-modal-btn').addEventListener('click', () => { videoModal.classList.remove('visible'); document.getElementById('youtube-iframe').src = ''; });
+            const updatePropertiesPanel = () => { const activeObject = canvas.getActiveObject(), panel = document.getElementById('properties-panel'); if (activeObject) { document.getElementById('fill-color-picker').value = activeObject.get('fill') || '#ffffff'; document.getElementById('fill-color-preview').style.backgroundColor = activeObject.get('fill'); document.getElementById('stroke-color-picker').value = activeObject.get('stroke') || '#000000'; document.getElementById('stroke-color-preview').style.backgroundColor = activeObject.get('stroke'); document.getElementById('stroke-width').value = activeObject.get('strokeWidth'); panel.classList.add('visible'); } else { panel.classList.remove('visible'); } };
+            canvas.on({ 'selection:created': updatePropertiesPanel, 'selection:updated': updatePropertiesPanel, 'selection:cleared': updatePropertiesPanel });
+            const applyProperty = (prop, value) => { canvas.getActiveObjects().forEach(obj => obj.set(prop, value)); canvas.renderAll(); }; document.getElementById('fill-color-preview').addEventListener('click', () => document.getElementById('fill-color-picker').click()); document.getElementById('stroke-color-preview').addEventListener('click', () => document.getElementById('stroke-color-picker').click()); document.getElementById('fill-color-picker').addEventListener('input', (e) => { document.getElementById('fill-color-preview').style.backgroundColor = e.target.value; applyProperty('fill', e.target.value); }); document.getElementById('stroke-color-picker').addEventListener('input', (e) => { document.getElementById('stroke-color-preview').style.backgroundColor = e.target.value; applyProperty('stroke', e.target.value); }); document.getElementById('stroke-width').addEventListener('input', (e) => applyProperty('strokeWidth', parseInt(e.target.value, 10)));
+            
+            // --- INITIALIZATION ---
+            loadBoard();
+            listenForUpdates();
+            setActiveTool(document.getElementById('select-tool'));
+            updateZoomLevel();
+        });
     </script>
 </body>
 </html>
-
-
