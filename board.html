@@ -68,76 +68,112 @@
             // --- REAL-TIME SYNC LOGIC (SUPABASE) ---
 			const debounce = (func, delay) => {
 			    let timeout;
-			    
 			    const debounced = (...args) => {
+			        console.log(`[${CLIENT_ID}] Debounce reset. Scheduling save in ${delay}ms.`);
 			        clearTimeout(timeout);
 			        timeout = setTimeout(() => func.apply(this, args), delay);
 			    };
-			
 			    const cancel = () => {
+			        console.log(`[${CLIENT_ID}] CANCELLING pending save.`);
 			        clearTimeout(timeout);
 			    };
+			    return [debounced, cancel];
+			};
 			
-			    // Return both the function and its cancellation method
-			    return [debounced, cancel]; 
-			};
-
 			const saveBoard = async () => {
-				if (isSyncing) return;
-				const json = canvas.toJSON(['youtubeVideoId', 'lockAspectRatio']);
-				
-				const { error } = await supabaseClient
-					.from('boards')
-					// Add last_updated_by to the upsert payload
-					.upsert({ id: BOARD_ID, data: json, last_updated_by: CLIENT_ID }); 
-
-				if (error) console.error('Error saving board:', error);
+			    // This check is now a safety net, the main check is in handleCanvasChange
+			    if (isSyncing) {
+			        console.warn(`[${CLIENT_ID}] Save was attempted while syncing. Aborting.`);
+			        return;
+			    }
+			
+			    console.log(`%c[${CLIENT_ID}] SAVING to Supabase...`, 'color: blue; font-weight: bold;');
+			    const json = canvas.toJSON(['youtubeVideoId', 'lockAspectRatio']);
+			    
+			    const { error } = await supabaseClient
+			        .from('boards')
+			        .upsert({ id: BOARD_ID, data: json, last_updated_by: CLIENT_ID }); 
+			
+			    if (error) console.error(`[${CLIENT_ID}] Error saving board:`, error);
+			    else console.log(`%c[${CLIENT_ID}] SAVE successful.`, 'color: blue;');
 			};
-            const [debouncedSave, cancelSave] = debounce(saveBoard, 1000);
-
-            const loadBoard = async () => {
-                const { data, error } = await supabaseClient
-                    .from('boards')
-                    .select('data')
-                    .eq('id', BOARD_ID)
-                    .single(); // .single() gets one object, not an array
-
-                if (error && error.code !== 'PGRST116') { // Ignore 'row not found' errors
-                    console.error('Error loading board:', error);
-                }
-
-                if (data) {
-                    canvas.loadFromJSON(data.data, canvas.renderAll.bind(canvas));
-                } else {
-                    canvas.add(new fabric.IText('Drop an image or YouTube URL here!', { left: 100, top: 100, fontSize: 28, fill: '#333', textBaseline: 'bottom' }));
-                }
-            };
-
+			
+			const [debouncedSave, cancelSave] = debounce(saveBoard, 1000);
+			
+			const loadBoard = async () => {
+			    console.log(`[${CLIENT_ID}] Loading initial board state...`);
+			    const { data, error } = await supabaseClient
+			        .from('boards')
+			        .select('data')
+			        .eq('id', BOARD_ID)
+			        .single();
+			
+			    if (error && error.code !== 'PGRST116') {
+			        console.error('Error loading board:', error);
+			    }
+			
+			    if (data) {
+			        canvas.loadFromJSON(data.data, canvas.renderAll.bind(canvas));
+			        console.log(`[${CLIENT_ID}] Board loaded successfully.`);
+			    } else {
+			        canvas.add(new fabric.IText('Drop an image or YouTube URL here!', { left: 100, top: 100, fontSize: 28, fill: '#333', textBaseline: 'bottom' }));
+			        console.log(`[${CLIENT_ID}] No board found, created initial text.`);
+			    }
+			};
+			
 			const listenForUpdates = () => {
+			    console.log(`[${CLIENT_ID}] Subscribing to board updates...`);
 			    supabaseClient.channel('board-updates')
 			        .on(
 			            'postgres_changes',
 			            { event: '*', schema: 'public', table: 'boards', filter: `id=eq.${BOARD_ID}` },
 			            (payload) => {
-			                if (payload.new.last_updated_by === CLIENT_ID) {
-			                    return; // This update was from us, so ignore it.
+			                const senderId = payload.new.last_updated_by;
+			                console.log(`[${CLIENT_ID}] Received update from [${senderId}].`);
+			
+			                if (senderId === CLIENT_ID) {
+			                    console.log(`[${CLIENT_ID}] Ignoring own update.`);
+			                    return;
 			                }
 			
-			                // --- THIS IS THE FIX ---
-			                // An update came from another client.
-			                // Cancel any save operation we had scheduled to avoid overwriting their change.
+			                console.log(`%c[${CLIENT_ID}] Foreign update detected. Cancelling any pending local save.`, 'color: orange;');
 			                cancelSave(); 
 			
 			                isSyncing = true;
+			                console.log(`%c[${CLIENT_ID}] SYNCING... Loading new board state.`, 'color: green;');
+			                
 			                const newJson = payload.new.data;
+			                // Preserve the current viewport transform (zoom/pan)
+			                const vpt = canvas.viewportTransform;
 			                canvas.loadFromJSON(newJson, () => {
+			                    canvas.setViewportTransform(vpt); // Restore viewport
 			                    canvas.renderAll();
+			                    console.log(`%c[${CLIENT_ID}] SYNC complete.`, 'color: green;');
 			                    setTimeout(() => { isSyncing = false; }, 200);
 			                });
 			            }
 			        )
-			        .subscribe();
+			        .subscribe((status) => {
+			            console.log(`[${CLIENT_ID}] Supabase channel status: ${status}`);
+			        });
 			};
+			
+			// --- EVENT LISTENERS ---
+			// This is the new, crucial function that gates the debouncer
+			const handleCanvasChange = (event) => {
+			    if (isSyncing) {
+			        console.warn(`[${CLIENT_ID}] Canvas event (${event.type}) ignored because isSyncing=true.`);
+			        return;
+			    }
+			    console.log(`[${CLIENT_ID}] Canvas event: ${event.type}`);
+			    debouncedSave();
+			};
+			
+			canvas.on({
+			    'object:added': handleCanvasChange,
+			    'object:removed': handleCanvasChange,
+			    'object:modified': handleCanvasChange
+			});
             
             // --- EVENT LISTENERS ---
             canvas.on({ 'object:added': debouncedSave, 'object:removed': debouncedSave, 'object:modified': debouncedSave });
@@ -197,4 +233,5 @@
     </script>
 </body>
 </html>
+
 
