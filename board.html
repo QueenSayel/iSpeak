@@ -3,13 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- FIX 1: Add a referrer policy to satisfy YouTube's embed requirements -->
+    <meta name="referrer" content="strict-origin-when-cross-origin">
     <title>Whiteboard | iSpeak.com.pl</title>
     
-    <!-- FontAwesome for icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
     
-    <!-- Styles are unchanged -->
     <style>
+        /* CSS is unchanged */
         :root {
             --tool-bg: #ffffff;
             --tool-border: #e0e0e0;
@@ -146,6 +147,51 @@
         }
         .nav-btn:hover { background-color: var(--tool-hover-bg); border-radius: 6px; }
         .zoom-level { cursor: default; font-weight: 500; }
+
+        .video-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease, visibility 0.3s ease;
+        }
+        .video-modal.visible {
+            opacity: 1;
+            visibility: visible;
+        }
+        .video-modal .video-container {
+            position: relative;
+            width: 80%;
+            max-width: 960px;
+            padding-bottom: 45%;
+            height: 0;
+        }
+        .video-modal iframe {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+        .video-modal .close-btn {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            font-size: 30px;
+            color: white;
+            background: none;
+            border: none;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
@@ -154,7 +200,7 @@
         <canvas id="board"></canvas>
     </div>
 
-    <!-- The HTML structure is unchanged -->
+    <!-- UI Elements -->
     <div class="main-toolbar">
         <button class="tool" id="select-tool" data-tool="pan" title="Select & Pan"><i class="fas fa-mouse-pointer"></i></button>
         <div id="shapes-tool-wrapper" style="position: relative;">
@@ -168,7 +214,6 @@
         <button class="tool" data-tool="arrow" title="Arrow"><i class="fas fa-long-arrow-alt-right"></i></button>
         <button class="tool" data-tool="text" title="Text"><i class="fas fa-font"></i></button>
     </div>
-
     <div class="properties-panel" id="properties-panel">
         <div class="prop-group">
             <input type="color" id="fill-color-picker" style="display: none;">
@@ -184,18 +229,22 @@
             <input type="number" id="stroke-width" min="1" max="50" title="Stroke Width">
         </div>
     </div>
-    
     <div class="navigation-controls">
         <button class="nav-btn" id="zoom-out" title="Zoom Out"><i class="fas fa-minus"></i></button>
         <div class="zoom-level" id="zoom-level">100%</div>
         <button class="nav-btn" id="zoom-in" title="Zoom In"><i class="fas fa-plus"></i></button>
         <button class="nav-btn" id="reset-view" title="Reset View"><i class="fas fa-expand"></i></button>
     </div>
+    
+    <div id="video-modal" class="video-modal">
+        <button class="close-btn" id="close-modal-btn">&times;</button>
+        <div class="video-container">
+            <iframe id="youtube-iframe" src="" title="YouTube video player" frameborder="0" allow="autoplay; fullscreen" allowfullscreen></iframe>
+        </div>
+    </div>
 
-    <!-- Libraries -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
 
-    <!-- Application Script with fixes -->
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             const canvas = new fabric.Canvas('board', {
@@ -208,61 +257,43 @@
             let currentTool = 'pan';
             let isPanning = false;
             const ui = {
-                toolbar: document.querySelector('.main-toolbar'),
-                tools: document.querySelectorAll('.main-toolbar .tool, .flyout-menu .tool'),
-                shapesTool: document.getElementById('shapes-tool'),
-                shapesFlyout: document.getElementById('shapes-flyout'),
-                propertiesPanel: document.getElementById('properties-panel'),
-                fillColorPicker: document.getElementById('fill-color-picker'),
-                fillColorPreview: document.getElementById('fill-color-preview'),
-                strokeColorPicker: document.getElementById('stroke-color-picker'),
-                strokeColorPreview: document.getElementById('stroke-color-preview'),
-                strokeWidthInput: document.getElementById('stroke-width'),
-                zoomInBtn: document.getElementById('zoom-in'),
-                zoomOutBtn: document.getElementById('zoom-out'),
-                resetViewBtn: document.getElementById('reset-view'),
                 zoomLevelDisplay: document.getElementById('zoom-level'),
+                videoModal: document.getElementById('video-modal'),
+                closeModalBtn: document.getElementById('close-modal-btn'),
+                youtubeIframe: document.getElementById('youtube-iframe'),
             };
-
-            // --- CORE CANVAS FUNCTIONALITY ---
+            
+            // (Core canvas, UI, Panning, and Object Creation sections are unchanged)
             const resizeCanvas = () => {
                 canvas.setWidth(window.innerWidth);
                 canvas.setHeight(window.innerHeight);
                 canvas.renderAll();
             };
             window.addEventListener('resize', resizeCanvas);
-
             const setActiveTool = (toolBtn) => {
                 currentTool = toolBtn.dataset.tool;
                 canvas.isDrawingMode = false;
                 canvas.selection = currentTool === 'pan';
                 canvas.defaultCursor = currentTool === 'pan' ? 'default' : 'crosshair';
-                
-                ui.tools.forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.main-toolbar .tool, .flyout-menu .tool').forEach(t => t.classList.remove('active'));
                 toolBtn.classList.add('active');
-                if (ui.shapesFlyout.contains(toolBtn)) {
-                    ui.shapesTool.classList.add('active'); // Keep parent tool active
+                if (document.getElementById('shapes-flyout').contains(toolBtn)) {
+                    document.getElementById('shapes-tool').classList.add('active');
                 }
                 hideFlyout();
             };
-
-            // --- UI INTERACTIONS ---
-            ui.tools.forEach(tool => {
+            document.querySelectorAll('.main-toolbar .tool, .flyout-menu .tool').forEach(tool => {
                 if (tool.id !== 'shapes-tool') {
                     tool.addEventListener('click', () => setActiveTool(tool));
                 }
             });
-            
-            ui.shapesTool.addEventListener('click', (e) => {
+            document.getElementById('shapes-tool').addEventListener('click', (e) => {
                 e.stopPropagation();
-                ui.shapesFlyout.classList.toggle('visible');
+                document.getElementById('shapes-flyout').classList.toggle('visible');
             });
-            
-            const hideFlyout = () => ui.shapesFlyout.classList.remove('visible');
+            const hideFlyout = () => document.getElementById('shapes-flyout').classList.remove('visible');
             document.body.addEventListener('click', hideFlyout);
-            ui.toolbar.addEventListener('click', (e) => e.stopPropagation());
-
-            // --- PANNING & ZOOMING ---
+            document.querySelector('.main-toolbar').addEventListener('click', (e) => e.stopPropagation());
             canvas.on('mouse:wheel', function(opt) {
                 const delta = opt.e.deltaY;
                 let zoom = canvas.getZoom();
@@ -274,45 +305,26 @@
                 opt.e.stopPropagation();
                 updateZoomLevel();
             });
-
             canvas.on('mouse:down', function(opt) {
-                if (opt.e.altKey || opt.e.button === 1) { // Pan with Alt or Middle Mouse
+                if (opt.e.altKey || opt.e.button === 1) {
                     isPanning = true;
-                    // **FIX 1**: Use `canvas` instead of `this` for consistency
                     canvas.setCursor('grabbing');
                 } else if (currentTool !== 'pan' && !opt.target) {
                     createObject(opt.pointer);
                 }
             });
-
-            canvas.on('mouse:move', (opt) => {
-                if (isPanning) {
-                    canvas.relativePan(new fabric.Point(opt.e.movementX, opt.e.movementY));
-                }
-            });
-            
-            // **FIX 1**: Use `canvas` instead of `this` to fix the TypeError
-            canvas.on('mouse:up', () => {
-                isPanning = false;
-                canvas.setCursor(canvas.defaultCursor);
-            });
-
-            const zoom = (factor) => {
-                const newZoom = canvas.getZoom() * factor;
-                canvas.zoomToPoint(new fabric.Point(canvas.width / 2, canvas.height / 2), newZoom);
-                updateZoomLevel();
-            };
-            ui.zoomInBtn.addEventListener('click', () => zoom(1.2));
-            ui.zoomOutBtn.addEventListener('click', () => zoom(1 / 1.2));
-            ui.resetViewBtn.addEventListener('click', () => { canvas.setViewportTransform([1, 0, 0, 1, 0, 0]); updateZoomLevel(); });
+            canvas.on('mouse:move', (opt) => { if (isPanning) { canvas.relativePan(new fabric.Point(opt.e.movementX, opt.e.movementY)); } });
+            canvas.on('mouse:up', () => { isPanning = false; canvas.setCursor(canvas.defaultCursor); });
+            const zoom = (factor) => { const newZoom = canvas.getZoom() * factor; canvas.zoomToPoint(new fabric.Point(canvas.width / 2, canvas.height / 2), newZoom); updateZoomLevel(); };
+            document.getElementById('zoom-in').addEventListener('click', () => zoom(1.2));
+            document.getElementById('zoom-out').addEventListener('click', () => zoom(1 / 1.2));
+            document.getElementById('reset-view').addEventListener('click', () => { canvas.setViewportTransform([1, 0, 0, 1, 0, 0]); updateZoomLevel(); });
             const updateZoomLevel = () => ui.zoomLevelDisplay.textContent = `${Math.round(canvas.getZoom() * 100)}%`;
-
-            // --- OBJECT CREATION & DELETION ---
             const createObject = (pointer) => {
                 const props = {
                     left: pointer.x, top: pointer.y, originX: 'center', originY: 'center',
-                    fill: ui.fillColorPicker.value, stroke: ui.strokeColorPicker.value,
-                    strokeWidth: parseInt(ui.strokeWidthInput.value, 10),
+                    fill: document.getElementById('fill-color-picker').value, stroke: document.getElementById('stroke-color-picker').value,
+                    strokeWidth: parseInt(document.getElementById('stroke-width').value, 10),
                 };
                 let shape;
                 switch (currentTool) {
@@ -324,14 +336,10 @@
                         const arrowhead = new fabric.Triangle({ left: 100, top: 0, originX: 'center', originY: 'center', angle: 90, width: 10, height: 10, fill: props.stroke });
                         shape = new fabric.Group([line, arrowhead], { left: pointer.x - 50, top: pointer.y });
                         break;
-                    case 'text':
-                        // **FIX 2**: Explicitly set textBaseline to prevent console warnings
-                        shape = new fabric.IText('Text', { ...props, fontSize: 24, textBaseline: 'bottom' });
-                        break;
+                    case 'text': shape = new fabric.IText('Text', { ...props, fontSize: 24, textBaseline: 'bottom' }); break;
                 }
                 if (shape) { canvas.add(shape); setActiveTool(document.getElementById('select-tool')); }
             };
-
             window.addEventListener('keydown', (e) => {
                 if (e.key === 'Delete' || e.key === 'Backspace') {
                     canvas.getActiveObjects().forEach(obj => canvas.remove(obj));
@@ -339,46 +347,109 @@
                 }
             });
 
-            // --- CONTEXTUAL PROPERTIES PANEL LOGIC ---
+            // --- DRAG & DROP HANDLING ---
+            window.addEventListener('dragover', (e) => { e.preventDefault(); });
+            window.addEventListener('drop', (e) => {
+                e.preventDefault();
+                const dropPoint = canvas.getPointer(e);
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    for (const file of files) {
+                        if (file.type.startsWith('image/')) {
+                             const reader = new FileReader();
+                            reader.onload = (f) => {
+                                const data = f.target.result;
+                                fabric.Image.fromURL(data, (img) => {
+                                    const maxDim = 400;
+                                    if (img.width > maxDim || img.height > maxDim) {
+                                        img.scaleToWidth(maxDim);
+                                        if (img.getScaledHeight() > maxDim) {
+                                            img.scaleToHeight(maxDim);
+                                        }
+                                    }
+                                    img.set({ left: dropPoint.x, top: dropPoint.y, originX: 'center', originY: 'center' });
+                                    canvas.add(img).requestRenderAll();
+                                });
+                            };
+                            reader.readAsDataURL(file);
+                        }
+                    }
+                    return;
+                }
+                if (e.dataTransfer.types.includes('text/plain')) {
+                    const url = e.dataTransfer.getData('text/plain');
+                    const videoId = parseYouTubeUrl(url);
+                    if (videoId) {
+                        createYouTubePlaceholder(videoId, dropPoint);
+                    }
+                }
+            });
+
+            // --- YOUTUBE VIDEO HANDLING ---
+            const parseYouTubeUrl = (url) => {
+                const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+                const match = url.match(regExp);
+                return (match && match[2].length === 11) ? match[2] : null;
+            };
+            const createYouTubePlaceholder = (videoId, dropPoint) => {
+                const thumbnailUrl = `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`;
+                fabric.Image.fromURL(thumbnailUrl, (img) => {
+                    img.scaleToWidth(320);
+                    const playIcon = new fabric.Text('►', {
+                        fontSize: 80, fill: 'rgba(255, 255, 255, 0.9)',
+                        stroke: 'rgba(0, 0, 0, 0.5)', strokeWidth: 1.5,
+                        originX: 'center', originY: 'center',
+                        textBaseline: 'alphabetic' 
+                    });
+                    const group = new fabric.Group([img, playIcon], {
+                        left: dropPoint.x, top: dropPoint.y,
+                        originX: 'center', originY: 'center',
+                        youtubeVideoId: videoId,
+                        lockAspectRatio: true
+                    });
+                    canvas.add(group).setActiveObject(group).requestRenderAll();
+                }, { crossOrigin: 'anonymous' });
+            };
+            canvas.on('mouse:dblclick', (opt) => {
+                const target = opt.target;
+                if (target && target.youtubeVideoId) {
+                    // FIX 2: Use the youtube-nocookie domain for better embed reliability
+                    ui.youtubeIframe.src = `https://www.youtube-nocookie.com/embed/${target.youtubeVideoId}?autoplay=1`;
+                    ui.videoModal.classList.add('visible');
+                }
+            });
+            ui.closeModalBtn.addEventListener('click', () => {
+                ui.videoModal.classList.remove('visible');
+                ui.youtubeIframe.src = '';
+            });
+            
+            // --- CONTEXTUAL PROPERTIES PANEL ---
+            const propertiesPanel = document.getElementById('properties-panel');
             const updatePropertiesPanel = () => {
                 const activeObject = canvas.getActiveObject();
                 if (activeObject) {
-                    ui.fillColorPicker.value = activeObject.get('fill') || '#ffffff';
-                    ui.fillColorPreview.style.backgroundColor = activeObject.get('fill');
-                    ui.strokeColorPicker.value = activeObject.get('stroke') || '#000000';
-                    ui.strokeColorPreview.style.backgroundColor = activeObject.get('stroke');
-                    ui.strokeWidthInput.value = activeObject.get('strokeWidth');
-                    ui.propertiesPanel.classList.add('visible');
+                    document.getElementById('fill-color-picker').value = activeObject.get('fill') || '#ffffff';
+                    document.getElementById('fill-color-preview').style.backgroundColor = activeObject.get('fill');
+                    document.getElementById('stroke-color-picker').value = activeObject.get('stroke') || '#000000';
+                    document.getElementById('stroke-color-preview').style.backgroundColor = activeObject.get('stroke');
+                    document.getElementById('stroke-width').value = activeObject.get('strokeWidth');
+                    propertiesPanel.classList.add('visible');
                 } else {
-                    ui.propertiesPanel.classList.remove('visible');
+                    propertiesPanel.classList.remove('visible');
                 }
             };
-
-            canvas.on({
-                'selection:created': updatePropertiesPanel,
-                'selection:updated': updatePropertiesPanel,
-                'selection:cleared': updatePropertiesPanel,
-            });
-            
-            const applyProperty = (prop, value) => {
-                canvas.getActiveObjects().forEach(obj => obj.set(prop, value));
-                canvas.renderAll();
-            };
-
-            ui.fillColorPreview.addEventListener('click', () => ui.fillColorPicker.click());
-            ui.strokeColorPreview.addEventListener('click', () => ui.strokeColorPicker.click());
-            ui.fillColorPicker.addEventListener('input', (e) => {
-                ui.fillColorPreview.style.backgroundColor = e.target.value;
-                applyProperty('fill', e.target.value);
-            });
-            ui.strokeColorPicker.addEventListener('input', (e) => {
-                ui.strokeColorPreview.style.backgroundColor = e.target.value;
-                applyProperty('stroke', e.target.value);
-            });
-            ui.strokeWidthInput.addEventListener('input', (e) => applyProperty('strokeWidth', parseInt(e.target.value, 10)));
+            canvas.on({ 'selection:created': updatePropertiesPanel, 'selection:updated': updatePropertiesPanel, 'selection:cleared': updatePropertiesPanel });
+            const applyProperty = (prop, value) => { canvas.getActiveObjects().forEach(obj => obj.set(prop, value)); canvas.renderAll(); };
+            document.getElementById('fill-color-preview').addEventListener('click', () => document.getElementById('fill-color-picker').click());
+            document.getElementById('stroke-color-preview').addEventListener('click', () => document.getElementById('stroke-color-picker').click());
+            document.getElementById('fill-color-picker').addEventListener('input', (e) => { document.getElementById('fill-color-preview').style.backgroundColor = e.target.value; applyProperty('fill', e.target.value); });
+            document.getElementById('stroke-color-picker').addEventListener('input', (e) => { document.getElementById('stroke-color-preview').style.backgroundColor = e.target.value; applyProperty('stroke', e.target.value); });
+            document.getElementById('stroke-width').addEventListener('input', (e) => applyProperty('strokeWidth', parseInt(e.target.value, 10)));
 
             // --- INITIALIZATION ---
-            canvas.add(new fabric.IText('Welcome to iSpeak.com.pl Whiteboard!', { left: 100, top: 100, fontSize: 28, fill: '#333' }));
+            canvas.add(new fabric.IText('Drop an image or YouTube URL here!', { 
+                left: 100, top: 100, fontSize: 28, fill: '#333', textBaseline: 'bottom' 
+            }));
             setActiveTool(document.getElementById('select-tool'));
             updateZoomLevel();
         });
