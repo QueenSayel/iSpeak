@@ -54,7 +54,8 @@
             // 1. Paste your Supabase URL and Anon Key here
             const SUPABASE_URL = 'https://oysjdtlpmawebbncvnqt.supabase.co';
             const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im95c2pkdGxwbWF3ZWJibmN2bnF0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU1MzA0NjgsImV4cCI6MjA3MTEwNjQ2OH0.JGJRzRfEJLL0TDhIN9DLnLu0TiuT3YRKU55tRdgtSgE';
-            const BOARD_ID = 'default'; // We will save everything to a single row with this ID
+            const BOARD_ID = 'default';
+			const CLIENT_ID = 'client_' + Math.random().toString(36).substring(2, 9);
 
             // 2. Initialize Supabase client
             const { createClient } = supabase;
@@ -70,16 +71,17 @@
                 return (...args) => { clearTimeout(timeout); timeout = setTimeout(() => func.apply(this, args), delay); };
             };
 
-            const saveBoard = async () => {
-                if (isSyncing) return;
-                const json = canvas.toJSON(['youtubeVideoId', 'lockAspectRatio']);
-                
-                const { error } = await supabaseClient
-                    .from('boards')
-                    .upsert({ id: BOARD_ID, data: json });
+			const saveBoard = async () => {
+				if (isSyncing) return;
+				const json = canvas.toJSON(['youtubeVideoId', 'lockAspectRatio']);
+				
+				const { error } = await supabaseClient
+					.from('boards')
+					// Add last_updated_by to the upsert payload
+					.upsert({ id: BOARD_ID, data: json, last_updated_by: CLIENT_ID }); 
 
-                if (error) console.error('Error saving board:', error);
-            };
+				if (error) console.error('Error saving board:', error);
+			};
             const debouncedSave = debounce(saveBoard, 1000);
 
             const loadBoard = async () => {
@@ -100,22 +102,27 @@
                 }
             };
 
-            const listenForUpdates = () => {
-                supabaseClient.channel('board-updates')
-                    .on(
-                        'postgres_changes',
-                        { event: '*', schema: 'public', table: 'boards', filter: `id=eq.${BOARD_ID}` },
-                        (payload) => {
-                            isSyncing = true;
-                            const newJson = payload.new.data;
-                            canvas.loadFromJSON(newJson, () => {
-                                canvas.renderAll();
-                                setTimeout(() => { isSyncing = false; }, 200);
-                            });
-                        }
-                    )
-                    .subscribe();
-            };
+			const listenForUpdates = () => {
+				supabaseClient.channel('board-updates')
+					.on(
+						'postgres_changes',
+						{ event: '*', schema: 'public', table: 'boards', filter: `id=eq.${BOARD_ID}` },
+						(payload) => {
+							// --- THIS IS THE CRITICAL CHECK ---
+							if (payload.new.last_updated_by === CLIENT_ID) {
+								return; // This update was from us, so ignore it.
+							}
+
+							isSyncing = true;
+							const newJson = payload.new.data;
+							canvas.loadFromJSON(newJson, () => {
+								canvas.renderAll();
+								setTimeout(() => { isSyncing = false; }, 200);
+							});
+						}
+					)
+					.subscribe();
+			};
             
             // --- EVENT LISTENERS ---
             canvas.on({ 'object:added': debouncedSave, 'object:removed': debouncedSave, 'object:modified': debouncedSave });
