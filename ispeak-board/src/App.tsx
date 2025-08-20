@@ -3,9 +3,8 @@
 import {
   Tldraw,
   Editor,
-  // 'assetCreateOverride' has been removed
 } from 'tldraw'
-import type { TLStoreSnapshot } from 'tldraw' // We no longer need TLAsset here
+import type { TLStoreSnapshot } from 'tldraw'
 
 import 'tldraw/tldraw.css'
 import { useCallback, useEffect, useState } from 'react'
@@ -13,8 +12,6 @@ import { useDebouncedCallback } from 'use-debounce'
 import { supabase } from './supabaseClient'
 
 const BOARD_ID = 'my-first-board'
-
-// The 'myOverrides' constant has been completely removed.
 
 function LoadingScreen() {
   return (
@@ -37,23 +34,35 @@ export default function App() {
   const [editor, setEditor] = useState<Editor>()
   const [snapshot, setSnapshot] = useState<TLStoreSnapshot | null>(null)
 
+  // This useEffect has been rewritten to use async/await
   useEffect(() => {
-    supabase
-      .from('boards')
-      .select('content')
-      .eq('id', BOARD_ID)
-      .then(({ data }) => {
-        if (data?.[0]?.content) {
-          setSnapshot(data[0].content)
+    // We define an async function inside the effect
+    const loadBoard = async () => {
+      try {
+        // We 'await' the result of the Supabase query
+        const { data } = await supabase
+          .from('boards')
+          .select('content')
+          .eq('id', BOARD_ID)
+          .single() // .single() is a good practice when you expect one row
+
+        if (data?.content) {
+          setSnapshot(data.content)
         } else {
+          // If no data is found, we still treat it as a successful load of an empty board
           setSnapshot({} as TLStoreSnapshot)
         }
-      })
-      .catch((error: any) => {
-        console.error(error)
+      } catch (error) {
+        // Any error (network, etc.) is caught here
+        console.error('Failed to load board:', error)
+        // Ensure the app unblocks even if loading fails
         setSnapshot({} as TLStoreSnapshot)
-      })
-  }, [])
+      }
+    }
+
+    // We call the async function
+    loadBoard()
+  }, []) // The empty dependency array is correct, so this runs only once on mount
 
   const handleMount = useCallback((editor: Editor) => {
     setEditor(editor)
@@ -100,7 +109,6 @@ export default function App() {
   return (
     <div style={{ position: 'fixed', inset: 0 }}>
       <Tldraw
-        // The 'overrides' prop has been removed
         snapshot={snapshot}
         onMount={handleMount}
         autoFocus
