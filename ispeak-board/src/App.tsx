@@ -1,12 +1,12 @@
 // src/App.tsx
+
 import {
   Tldraw,
-  getSnapshot,
-  type Editor,
-  type TLStoreSnapshot,
-  type TLAsset,
-  type AssetUtils, // 1. Import the AssetUtils type (good practice)
+  Editor,
+  // 'assetCreateOverride' has been removed
 } from 'tldraw'
+import type { TLStoreSnapshot } from 'tldraw' // We no longer need TLAsset here
+
 import 'tldraw/tldraw.css'
 import { useCallback, useEffect, useState } from 'react'
 import { useDebouncedCallback } from 'use-debounce'
@@ -14,57 +14,8 @@ import { supabase } from './supabaseClient'
 
 const BOARD_ID = 'my-first-board'
 
-// 2. Define our custom asset utility outside the component.
-// This object implements the `create` method of the AssetUtils interface.
-const myAssetUtils: AssetUtils = {
-  async create(file: File): Promise<TLAsset> {
-    // The logic inside is the same as our old handleAssetCreate function.
+// The 'myOverrides' constant has been completely removed.
 
-    // Create a unique file name for the asset.
-    const fileName = `${crypto.randomUUID()}-${file.name}`
-
-    // Upload the file to the 'board-assets' bucket in Supabase Storage.
-    const { data, error } = await supabase.storage
-      .from('board-assets')
-      .upload(fileName, file)
-
-    if (error) {
-      console.error('Failed to upload asset:', error)
-      throw new Error('Failed to upload asset')
-    }
-
-    // Get the public URL of the uploaded file.
-    const {
-      data: { publicUrl },
-    } = supabase.storage.from('board-assets').getPublicUrl(data.path)
-
-    // Get the image's dimensions.
-    const size = await new Promise<{ w: number; h: number }>((resolve, reject) => {
-      const img = new Image()
-      img.onload = () => resolve({ w: img.width, h: img.height })
-      img.onerror = reject
-      img.src = URL.createObjectURL(file)
-    })
-
-    // Return a TLAsset object that tldraw will use.
-    return {
-      id: crypto.randomUUID() as TLAsset['id'],
-      typeName: 'asset',
-      type: 'image',
-      props: {
-        name: file.name,
-        src: publicUrl, // The URL from Supabase Storage!
-        w: size.w,
-        h: size.h,
-        mimeType: file.type,
-        isAnimated: false,
-      },
-      meta: {},
-    }
-  },
-}
-
-// LoadingScreen component remains the same
 function LoadingScreen() {
   return (
     <div
@@ -98,7 +49,7 @@ export default function App() {
           setSnapshot({} as TLStoreSnapshot)
         }
       })
-      .catch((error) => {
+      .catch((error: any) => {
         console.error(error)
         setSnapshot({} as TLStoreSnapshot)
       })
@@ -108,17 +59,11 @@ export default function App() {
     setEditor(editor)
   }, [])
 
-  // 3. The old onAssetCreate useCallback handler is now REMOVED.
-
   const debouncedSave = useDebouncedCallback((editorToSave: Editor) => {
     const startTime = new Date()
     console.log(`--- EXECUTING SAVE LOGIC NOW --- at ${startTime.toLocaleTimeString()}`)
-    const currentSnapshot = getSnapshot(editorToSave.store)
-    const snapshotString = JSON.stringify(currentSnapshot)
-    const sizeInBytes = new TextEncoder().encode(snapshotString).length
-    const sizeInKB = (sizeInBytes / 1024).toFixed(2)
-    const sizeInMB = (sizeInBytes / 1024 / 1024).toFixed(2)
-    console.log(`- Snapshot size: ${sizeInKB} KB (${sizeInMB} MB)`)
+
+    const currentSnapshot = editorToSave.getSnapshot()
 
     supabase
       .from('boards')
@@ -129,18 +74,18 @@ export default function App() {
         } else {
           const endTime = new Date()
           const duration = endTime.getTime() - startTime.getTime()
-          console.log(
-            `✅ Board saved successfully! at ${endTime.toLocaleTimeString()} (took ${duration}ms)`
-          )
+          console.log(`✅ Board saved successfully! at ${endTime.toLocaleTimeString()} (took ${duration}ms)`)
         }
       })
   }, 500)
 
   useEffect(() => {
     if (!editor) return
+
     const unlisten = editor.store.listen(() => {
       debouncedSave(editor)
     }, { scope: 'document' })
+
     return () => unlisten()
   }, [editor, debouncedSave])
 
@@ -155,11 +100,9 @@ export default function App() {
   return (
     <div style={{ position: 'fixed', inset: 0 }}>
       <Tldraw
+        // The 'overrides' prop has been removed
         snapshot={snapshot}
         onMount={handleMount}
-        // 4. Pass the new assetUtils object to the Tldraw component.
-        // REMOVE the old onAssetCreate prop.
-        assetUtils={myAssetUtils}
         autoFocus
       />
     </div>
