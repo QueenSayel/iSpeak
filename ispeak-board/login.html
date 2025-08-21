@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>iSpeak</title>
+    <link rel="stylesheet" href="/src/login.css">
+</head>
+<body>
+    <div class="login-container">
+        <!-- TABS TO SWITCH FORMS -->
+        <div class="tabs">
+            <button id="login-tab-btn" class="tab-btn active">Login</button>
+            <button id="signup-tab-btn" class="tab-btn">Sign Up</button>
+        </div>
+
+        <!-- LOGIN FORM -->
+        <form id="login-form">
+            <h1>Login</h1>
+            <div class="form-group">
+                <label for="login-email">Email</label>
+                <input type="email" id="login-email" required>
+            </div>
+            <div class="form-group">
+                <label for="login-password">Password</label>
+                <input type="password" id="login-password" required>
+            </div>
+            <button type="submit">Log In</button>
+        </form>
+
+        <!-- SIGN UP FORM (Initially hidden) -->
+        <form id="signup-form" style="display:none;">
+            <h1>Create Student Account</h1>
+            <div class="form-group">
+                <label for="signup-email">Email</label>
+                <input type="email" id="signup-email" required>
+            </div>
+            <div class="form-group">
+                <label for="signup-password">Password</label>
+                <input type="password" id="signup-password" minlength="6" required>
+            </div>
+            <button type="submit">Sign Up</button>
+        </form>
+        <p id="message"></p>
+    </div>
+    <script type="module" src="/src/login.js"></script>
+</body>
+</html>

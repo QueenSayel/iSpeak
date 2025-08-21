@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard</title>
+    
+    <!-- Font Awesome CDN -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.14/index.global.min.js'></script>
+    <link rel="stylesheet" href="/src/admin.css">
+    <style> 
+        .content-tab { display: none; } 
+        .content-tab.active { display: block; }
+        .board-list li > div:last-child { display: flex; gap: 0.5rem; }
+        /* Add a little space between icon and text */
+        .tab-btn i, button i { margin-right: 0.5rem; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>
+            <span><i class="fa-solid fa-shield-halved"></i> Admin Management</span>
+            <button id="logout-btn"><i class="fa-solid fa-right-from-bracket"></i> Logout</button>
+        </h1>
+        
+        <!-- TABS with icons -->
+        <nav class="tabs">
+            <button id="boards-tab-btn" class="tab-btn active"><i class="fa-solid fa-chalkboard"></i> Boards</button>
+            <button id="students-tab-btn" class="tab-btn"><i class="fa-solid fa-users"></i> Students</button>
+			<button id="schedule-tab-btn" class="tab-btn"><i class="fa-solid fa-calendar-days"></i> Schedule</button>
+        </nav>
+
+        <!-- BOARDS CONTENT -->
+        <div id="boards-content" class="content-tab active">
+            <h2><i class="fa-solid fa-chalkboard-user"></i> Boards</h2>
+            <ul id="board-list" class="board-list"></ul>
+            <h2><i class="fa-solid fa-plus"></i> Add New</h2>
+            <form id="new-board-form">
+                <input type="text" id="new-board-name" placeholder="Enter new board name" required>
+                <button type="submit">Add</button>
+            </form>
+        </div>
+
+        <!-- STUDENTS CONTENT -->
+        <div id="students-content" class="content-tab">
+            <h2><i class="fa-solid fa-user-graduate"></i> Registered Students</h2>
+            <ul id="student-list" class="board-list"></ul>
+        </div>
+		
+        <!-- SCHEDULE CONTENT -->
+        <div id="schedule-content" class="content-tab">
+            <h2><i class="fa-solid fa-clock"></i> Set Your Availability</h2>
+            <div id="calendar-instructions">
+                <p>Click on a time slot in the calendar below to mark yourself as available. Click an existing "Available" block to remove it.</p>
+            </div>
+            <div id="calendar"></div>
+        </div>
+		
+    </div>
+
+    <!-- MODAL HTML (hidden by default) -->
+    <div id="manage-access-modal" class="modal-overlay" style="display:none;">
+        <div class="modal-content">
+            <h2 id="modal-board-name"><i class="fa-solid fa-user-gear"></i> Manage Access for...</h2>
+            <ul id="modal-student-list" class="board-list"></ul>
+            <button id="close-modal-btn">Close</button>
+        </div>
+    </div>
+
+    <script type="module" src="/src/admin.js"></script>
+</body>
+</html>
