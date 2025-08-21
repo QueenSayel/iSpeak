@@ -1,0 +1,332 @@
+/* --- GLOBAL STYLES & VARIABLES --- */
+:root {
+    --primary-color: #00A896;
+    --primary-hover-color: #02C39A;
+    --danger-color: #e53e3e;
+    --danger-hover-color: #c53030;
+    --dark-color: #2b2d42;
+    --light-gray-color: #f7fafc;
+    --border-color: #e2e8f0;
+    --text-color: #4a5568;
+    --white-color: #ffffff;
+    --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+body {
+    font-family: var(--font-family);
+    background-color: var(--light-gray-color);
+    color: var(--text-color);
+    margin: 0;
+    padding: 2rem;
+    box-sizing: border-box;
+}
+
+/* --- MAIN CONTAINER --- */
+.container {
+    max-width: 800px;
+    margin: 0 auto;
+    background-color: var(--white-color);
+    padding: 2rem;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+/* --- TYPOGRAPHY & HEADERS --- */
+h1, h2 {
+    color: var(--dark-color);
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 1rem;
+    margin-top: 0;
+    margin-bottom: 1.5rem;
+}
+
+h1 {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 1.75rem;
+}
+
+h2 {
+    font-size: 1.25rem;
+    margin-top: 2rem;
+}
+
+/* --- BOARD LIST STYLES --- */
+.board-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.board-list li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem;
+    border-bottom: 1px solid var(--border-color);
+    transition: background-color 0.2s ease-in-out;
+}
+
+.board-list li:last-child {
+    border-bottom: none;
+}
+
+.board-list li:hover {
+    background-color: var(--light-gray-color);
+}
+
+.board-list a {
+    text-decoration: none;
+    color: var(--primary-color);
+    font-weight: 600;
+    font-size: 1.1rem;
+}
+
+.board-list a:hover {
+    text-decoration: underline;
+}
+
+.board-list small {
+    display: block;
+    color: #a0aec0;
+    margin-top: 0.25rem;
+    font-size: 0.8rem;
+}
+
+/* --- BUTTON STYLES --- */
+button {
+    font-family: inherit;
+    font-size: 0.9rem;
+    font-weight: 600;
+    padding: 0.5rem 1rem;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background-color 0.2s ease-in-out, transform 0.1s ease;
+}
+
+button:active {
+    transform: scale(0.98);
+}
+
+#logout-btn {
+    background-color: #edf2f7;
+    color: var(--text-color);
+}
+
+#logout-btn:hover {
+    background-color: #e2e8f0;
+}
+
+.delete-btn {
+    background-color: var(--danger-color);
+    color: var(--white-color);
+}
+
+.delete-btn:hover {
+    background-color: var(--danger-hover-color);
+}
+
+/* --- NEW BOARD FORM --- */
+#new-board-form {
+    display: flex;
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+#new-board-form input[type="text"] {
+    flex-grow: 1;
+    padding: 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    font-size: 1rem;
+}
+
+#new-board-form input[type="text"]:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(0, 168, 150, 0.2);
+}
+
+#new-board-form button {
+    background-color: var(--primary-color);
+    color: var(--white-color);
+    padding: 0.75rem 1.5rem;
+}
+
+#new-board-form button:hover {
+    background-color: var(--primary-hover-color);
+}
+
+/* --- MODAL STYLES --- */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+.modal-content {
+    background: white;
+    padding: 2rem;
+    border-radius: 8px;
+    width: 90%;
+    max-width: 500px;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+#modal-student-list .action-btn {
+    padding: 0.4rem 0.8rem;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    color: white;
+}
+.add-btn { background-color: #48bb78; }
+.remove-btn { background-color: #f56565; }
+#close-modal-btn { margin-top: 1rem; background: #e2e8f0; }
+
+/* --- RESPONSIVE DESIGN --- */
+@media (max-width: 600px) {
+    body {
+        padding: 1rem;
+    }
+    .container {
+        padding: 1rem;
+    }
+    h1 {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1rem;
+    }
+    .board-list li {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.75rem;
+    }
+    #new-board-form {
+        flex-direction: column;
+    }
+}
+
+/* --- TAB STYLES --- */
+.tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border-color);
+    margin-bottom: 1.5rem;
+    gap: 0.5rem;
+}
+
+.tab-btn {
+    background: none;
+    padding: 0.8rem 1.2rem;
+    flex-grow: 0;
+    border-bottom: 3px solid transparent;
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+}
+
+.tab-btn.active {
+    border-bottom-color: var(--primary-color);
+    font-weight: bold;
+    background-color: #fdfdfd;
+}
+
+/* --- HIDE SCROLLBARS (CORRECTED) --- */
+
+/* For WebKit browsers like Chrome, Safari, Edge */
+/* Target html, body, and the modal to be certain */
+html::-webkit-scrollbar,
+body::-webkit-scrollbar,
+.modal-content::-webkit-scrollbar {
+  display: none;
+}
+
+/* For Firefox */
+/* Target html, body, and the modal here as well */
+html,
+body,
+.modal-content {
+  scrollbar-width: none;
+}
+
+#calendar {
+    /* Use our dashboard's border color for all calendar borders */
+    --fc-border-color: var(--border-color);
+
+    /* Use a subtle, transparent version of our primary color for the "today" highlight */
+    --fc-today-bg-color: rgba(0, 168, 150, 0.1);
+
+    /* Make the slot labels (e.g., 8:00 AM) a bit softer */
+    --fc-slot-label-color: #718096;
+}
+
+
+/* --- LEVEL 2: REFINING THE DETAILS (Class Overrides) --- */
+
+/* Make the header toolbar (prev, next, title) less cramped */
+.fc .fc-header-toolbar {
+    margin-bottom: 1.5rem;
+}
+
+/* Make the header buttons (prev, next, today, etc.) less boxy and match our theme */
+.fc .fc-button {
+    background-color: #f1f5f9;
+    border: 1px solid var(--border-color);
+    border-radius: 6px; /* Match our other buttons */
+    padding: 0.5em 0.8em;
+    font-weight: 600;
+    transition: background-color 0.2s ease;
+}
+
+/* Style for when a button is clicked or active (like the view switcher) */
+.fc .fc-button-primary:not(:disabled):active,
+.fc .fc-button-primary:not(:disabled).fc-button-active {
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
+}
+
+.fc .fc-button:hover {
+    background-color: #e2e8f0;
+}
+
+/* Soften the vertical lines in the time grid view */
+.fc-timegrid-col.fc-day-today {
+    background-color: transparent; /* Remove the default yellow highlight */
+}
+.fc-timegrid-slot-lane {
+    border-color: #f1f5f9; /* Make the horizontal lines very faint */
+}
+
+
+/* --- LEVEL 3: ENHANCING THE EVENTS --- */
+
+/* Style the "Available" event blocks */
+.fc-event {
+    border-radius: 4px; /* Give events slightly rounded corners */
+    font-weight: 600;
+    padding: 2px 4px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+/* Make events "pop" when you hover over them */
+.fc-event:hover {
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+    transform: translateY(-2px);
+}
+
+/* Improve the look of the "List" view */
+.fc-list-event-title a {
+    text-decoration: none; /* Remove underline in list view */
+    color: inherit;
+}
+
+.fc-list-day-text {
+    font-weight: bold;
+    color: var(--dark-color);
+}
