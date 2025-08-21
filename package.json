@@ -2,7 +2,6 @@
   "name": "ispeak-english",
   "version": "1.0.0",
   "scripts": {
-    "build": "cd ispeak-board && npm install && npm run build && cd .. && rm -rf dist && mkdir dist && cp -r ispeak-board/dist/ dist/board && cp index.html styles.css script.js dist/"
+    "build": "cd ispeak-board && npm install && npm run build && cd .. && rm -rf dist && mkdir dist && cp -r ispeak-board/dist/ dist/board && cp index.html styles.css script.js dist/ && cp ispeak-board/login.html dist/board/ && cp ispeak-board/admin.html dist/board/ && cp ispeak-board/student.html dist/board/"
   }
-
 }
