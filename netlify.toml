@@ -1,0 +1,11 @@
+# netlify.toml
+
+# This is the rewrite rule for your dynamic tldraw boards.
+[[redirects]]
+  # Match any URL that starts with /board/b/ followed by anything.
+  from = "/board/b/*"
+  # Serve the main React application's index.html file.
+  to = "/board/index.html"
+  # The status 200 makes this a "rewrite" not a "redirect",
+  # keeping the clean URL in the browser's address bar.
+  status = 200
