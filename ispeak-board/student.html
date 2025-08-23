@@ -5,24 +5,54 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Student Dashboard</title>
 
-    <!-- Font Awesome CDN -->
+    <!-- Font Awesome & FullCalendar CDNs -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.14/index.global.min.js'></script>
 
+    <!-- Re-using the admin stylesheet is efficient -->
     <link rel="stylesheet" href="/src/admin.css">
-    <style>
-        /* Add a little space between icon and text */
-        h1 span i, button i { margin-right: 0.5rem; }
+    
+    <style> 
+        /* Small style tweaks for this page */
+        .content-tab { display: none; } 
+        .content-tab.active { display: block; }
+        h1 span i, .tab-btn i { margin-right: 0.5rem; }
+        #calendar-instructions { 
+            background-color: #ebf8ff; 
+            border-left: 4px solid #3182ce; 
+            padding: 1rem; 
+            margin-bottom: 1.5rem; 
+            border-radius: 4px; 
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>
-            <span><i class="fa-solid fa-chalkboard-user"></i> My Assigned Boards</span>
+            <span><i class="fa-solid fa-user-graduate"></i> Student Dashboard</span>
             <button id="logout-btn"><i class="fa-solid fa-right-from-bracket"></i> Logout</button>
         </h1>
-        <ul id="my-board-list" class="board-list">
-            <!-- Assigned boards will be dynamically inserted here -->
-        </ul>
+        
+        <!-- TABS -->
+        <nav class="tabs">
+            <button id="boards-tab-btn" class="tab-btn active"><i class="fa-solid fa-chalkboard-user"></i> My Boards</button>
+            <button id="schedule-tab-btn" class="tab-btn"><i class="fa-solid fa-calendar-check"></i> Book a Lesson</button>
+        </nav>
+
+        <!-- MY BOARDS CONTENT -->
+        <div id="boards-content" class="content-tab active">
+            <ul id="my-board-list" class="board-list">
+                <!-- Assigned boards will be dynamically inserted here -->
+            </ul>
+        </div>
+        
+        <!-- SCHEDULE CONTENT -->
+        <div id="schedule-content" class="content-tab">
+            <div id="calendar-instructions">
+                <p>Click on a green "Available" time slot to book your lesson. Red slots are already booked by others. Click your blue "My Lesson" slots to cancel.</p>
+            </div>
+            <div id="calendar"></div>
+        </div>
     </div>
     <script type="module" src="/src/student.js"></script>
 </body>
