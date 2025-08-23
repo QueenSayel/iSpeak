@@ -19,25 +19,20 @@ const scheduleContent = document.getElementById('schedule-content');
 const calendarEl = document.getElementById('calendar');
 
 let currentManagingBoardId = null; // Stores the ID of the board being managed in the modal
-let availableSlots = []; // An in-memory array to hold our availability events
 let calendar = null; // A variable to hold the calendar instance
+let adminProfile = null; // An in-memory array to hold our availability events
 
 // --- AUTH GUARD (Checks for admin role) ---
 async function checkAdminAuth() {
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-    if (sessionError || !session) {
-        window.location.href = '/board/login.html';
-        return;
-    }
-    const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', session.user.id)
-        .single();
+    if (sessionError || !session) { window.location.href = '/board/login.html'; return; }
+    const { data: profile, error: profileError } = await supabase.from('profiles').select('id, role').eq('id', session.user.id).single();
     if (profileError || !profile || profile.role !== 'admin') {
         alert('Access Denied. You do not have administrator privileges.');
         await supabase.auth.signOut();
         window.location.href = '/board/login.html';
+    } else {
+        adminProfile = profile; // Store the admin's profile for later
     }
 }
 
@@ -71,86 +66,133 @@ function initializeCalendar() {
     if (calendar) return;
 
     calendar = new FullCalendar.Calendar(calendarEl, {
-        // --- VISUAL UPGRADE 1: A BETTER DEFAULT VIEW & MORE OPTIONS ---
-        initialView: 'listWeek', // Start with the clean "agenda" view
+        // --- CALENDAR CONFIGURATION ---
+        initialView: 'listWeek',
         headerToolbar: {
             left: 'prev,next today',
             center: 'title',
-            right: 'listWeek,timeGridWeek,timeGridDay' // Let user switch views
+            right: 'listWeek,timeGridWeek,timeGridDay'
         },
         slotMinTime: '08:00:00',
         slotMaxTime: '20:00:00',
         allDaySlot: false,
         height: 'auto',
-        
-        // --- THE FIX FOR THE COLORS ---
-        // We provide events as a function. Now `refetchEvents()` works correctly.
-        events: function(fetchInfo, successCallback, failureCallback) {
-            successCallback(availableSlots);
+        editable: true,
+        selectable: true,
+
+        // --- DATA SOURCE: FETCH FROM SUPABASE ---
+        events: async function(fetchInfo) {
+            const { data, error } = await supabase
+                .from('availability')
+                .select('id, start_time, end_time, status, booked_by');
+            
+            if (error) { console.error('Error fetching availability:', error); return []; }
+
+            return data.map(slot => ({
+                id: slot.id,
+                start: slot.start_time,
+                end: slot.end_time,
+                title: slot.status === 'available' ? 'Available' : 'Booked',
+                backgroundColor: slot.status === 'available' ? '#28a745' : '#e53e3e',
+                borderColor: slot.status === 'available' ? '#28a745' : '#e53e3e',
+            }));
         },
 
-        // --- VISUAL UPGRADE 2: CUSTOM EVENT RENDERING ---
-        // This function controls how each "Available" block looks.
+        // --- VISUAL CUSTOMIZATION ---
         eventContent: function(arg) {
             let iconEl = document.createElement('i');
-            iconEl.className = 'fa-solid fa-circle-check';
+            iconEl.className = arg.event.title === 'Available' ? 'fa-solid fa-circle-check' : 'fa-solid fa-user-check';
             iconEl.style.marginRight = '8px';
-
             let titleEl = document.createElement('span');
             titleEl.textContent = arg.event.title;
-
             let arrayOfNodes = [iconEl, titleEl];
             return { domNodes: arrayOfNodes };
         },
-        
-        // --- VISUAL UPGRADE 3: DRAG & DROP AND RESIZING ---
-        editable: true,     // Allows dragging and resizing
-        selectable: true,   // Allows clicking and dragging to select a time range
 
-        // --- INTERACTIVITY (FIXED) ---
-        
-        // The redundant `dateClick` handler has been REMOVED from here.
-        
-        // This `select` handler now correctly handles both single clicks and dragging.
-        select: function(info) {
+        // --- OPTIMISTIC UI INTERACTIVITY (WITH BUG FIX) ---
+        select: async function(info) { // Create new availability
             const newSlot = {
-                id: Date.now().toString(),
+                id: Date.now().toString(), // Temporary ID for the UI
                 start: info.start,
                 end: info.end,
                 title: 'Available',
                 backgroundColor: '#28a745',
                 borderColor: '#28a745'
             };
-            availableSlots.push(newSlot);
-            calendar.refetchEvents();
-            console.log("Added slot via selection:", newSlot);
-        },
+            calendar.addEvent(newSlot); // Optimistically add to UI
 
-        eventClick: function(info) {
-            if (confirm("Are you sure you want to remove this available time slot?")) {
-                availableSlots = availableSlots.filter(slot => slot.id !== info.event.id);
-                calendar.refetchEvents();
-                console.log("Removed slot with ID:", info.event.id);
+            // Ask Supabase to return the newly created row
+            const { data, error } = await supabase.from('availability').insert({
+                start_time: info.start.toISOString(),
+                end_time: info.end.toISOString(),
+                status: 'available',
+                admin_id: adminProfile.id
+            }).select().single(); // This gets the new row back, including its real ID
+
+            if (error) {
+                console.error('Error creating slot:', error);
+                alert('Could not save the new slot. Please try again.');
+                const event = calendar.getEventById(newSlot.id);
+                if (event) event.remove(); // Rollback
+            } else {
+                // --- THE FIX ---
+                // Instead of refetching all events, we find our temporary event...
+                const tempEvent = calendar.getEventById(newSlot.id);
+                if (tempEvent) {
+                    // ...and update its ID to the permanent one from the database.
+                    tempEvent.setProp('id', data.id);
+                }
             }
         },
+        eventClick: async function(info) { // Delete availability or cancel booking
+            const event = info.event;
+            const eventId = event.id;
+            const eventTitle = event.title;
 
-        // These functions run after you drag or resize an event
-        eventDrop: function(info) {
-            // Find the event in our array and update its start/end times
-            let slot = availableSlots.find(s => s.id === info.event.id);
-            if (slot) {
-                slot.start = info.event.start;
-                slot.end = info.event.end;
-                console.log("Moved slot:", slot);
+            if (eventTitle === 'Available' && confirm("Are you sure you want to delete this available slot?")) {
+                event.remove(); // Optimistically remove from UI
+                const { error } = await supabase.from('availability').delete().eq('id', eventId);
+                if (error) {
+                    console.error('Error deleting slot:', error);
+                    alert('Could not delete the slot. It has been restored.');
+                    calendar.refetchEvents(); // Rollback by refetching
+                }
+            } else if (eventTitle === 'Booked' && confirm("Cancel this student's booking? This will make the slot available again.")) {
+                event.setProp('title', 'Available');
+                event.setProp('backgroundColor', '#28a745');
+                event.setProp('borderColor', '#28a745'); // Optimistically update UI
+                
+                const { error } = await supabase
+                    .from('availability')
+                    .update({ status: 'available', booked_by: null })
+                    .eq('id', eventId);
+
+                if (error) {
+                    console.error('Error cancelling booking:', error);
+                    alert('Could not cancel the booking. It has been restored.');
+                    calendar.refetchEvents(); // Rollback by refetching
+                }
             }
         },
+        eventDrop: async function(info) { // Move an event (already optimistic)
+            const { error } = await supabase.from('availability').update({
+                start_time: info.event.start.toISOString(),
+                end_time: info.event.end.toISOString()
+            }).eq('id', info.event.id);
 
-        eventResize: function(info) {
-            // Find the event and update its end time
-            let slot = availableSlots.find(s => s.id === info.event.id);
-            if (slot) {
-                slot.end = info.event.end;
-                console.log("Resized slot:", slot);
+            if (error) {
+                console.error('Error moving slot:', error);
+                info.revert(); // Rollback
+            }
+        },
+        eventResize: async function(info) { // Resize an event (already optimistic)
+            const { error } = await supabase.from('availability').update({
+                end_time: info.event.end.toISOString()
+            }).eq('id', info.event.id);
+
+            if (error) {
+                console.error('Error resizing slot:', error);
+                info.revert(); // Rollback
             }
         }
     });
