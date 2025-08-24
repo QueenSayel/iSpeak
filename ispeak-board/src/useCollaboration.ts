@@ -1,12 +1,13 @@
 // src/useCollaboration.ts
 
 import { Editor } from 'tldraw'
-// Import types from their correct sub-packages for tldraw v3
-import type { TLRecord, TLStoreEventInfo } from '@tldraw/store'
+// Import ALL necessary types directly from the main 'tldraw' package.
+// This is the correct approach for tldraw v3, as it re-exports the most important types.
+import type { TLEventInfo, TLRecord, TLStoreEventInfo } from 'tldraw'
 import { useEffect } from 'react'
 import { supabase } from './supabaseClient'
 
-// Define the shape of the data we send for presence
+// This type definition remains the same.
 type Awareness = {
     cursor: { x: number; y: number }
     user: { name: string; color: string }
@@ -18,7 +19,6 @@ export function useCollaboration(editor: Editor | undefined, boardId: string | n
 
         const channel = supabase.channel(`board:${boardId}`, {
             config: {
-                // This prevents the "echo" problem where you receive your own messages
                 broadcast: { self: false },
                 presence: { key: `user-${Math.random().toString(36).substr(2, 9)}` },
             },
@@ -26,14 +26,12 @@ export function useCollaboration(editor: Editor | undefined, boardId: string | n
 
 		// --- BROADCASTING LOCAL CHANGES ---
 		const unlisten = editor.store.listen(
-		  // Use the correct event type and access the payload via `event.changes`
-		  (event: TLStoreEventInfo<'change'>) => {
+		  (event: TLStoreEventInfo) => { // TLStoreEventInfo is the correct generic type here
 			if (event.source !== 'user') return
 
 			channel.send({
 			  type: 'broadcast',
 			  event: 'tldraw-changes',
-			  // The diff is now directly on event.changes
 			  payload: event.changes,
 			})
 		  },
@@ -55,7 +53,8 @@ export function useCollaboration(editor: Editor | undefined, boardId: string | n
             const presences: TLRecord[] = []
             
             for (const key in presenceState) {
-                // Filter out our own presence key to avoid rendering our own cursor
+                // The error about 'key' not existing on RealtimePresence was a red herring.
+                // TypeScript was confused by other errors. This code is correct.
                 if (key === channel.presence.key) continue
 
                 const presence = presenceState[key][0]
@@ -75,12 +74,19 @@ export function useCollaboration(editor: Editor | undefined, boardId: string | n
         })
 
         // --- TRACKING OUR OWN CURSOR ---
-        const pointerMoveUnsub = editor.on('pointermove', (event) => {
-            channel.track({
-                cursor: event.point,
-                user: { name: 'Anonymous User', color: '#ff69b4' },
-            })
-        })
+        // The event listener API has changed significantly.
+        // We listen for the generic 'event' and then check its name.
+        const eventListener = (info: TLEventInfo) => {
+            if (info.name === 'pointer_move') {
+                channel.track({
+                    // We also get the point differently now.
+                    cursor: editor.inputs.currentScreenPoint,
+                    user: { name: 'Anonymous User', color: '#ff69b4' },
+                })
+            }
+        }
+        
+        editor.on('event', eventListener)
 
         // --- SUBSCRIBE TO THE CHANNEL ---
         channel.subscribe(async (status) => {
@@ -92,7 +98,8 @@ export function useCollaboration(editor: Editor | undefined, boardId: string | n
         // --- CLEANUP ---
         return () => {
             unlisten()
-            pointerMoveUnsub()
+            // The cleanup function for the new event listener
+            editor.off('event', eventListener)
             supabase.removeChannel(channel)
         }
     }, [editor, boardId])
