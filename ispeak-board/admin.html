@@ -68,6 +68,46 @@
         </div>
     </div>
 
+    <div id="event-details-modal" class="modal-overlay" style="display:none;">
+        <div class="modal-content">
+            <h2 id="modal-event-title">Event Details</h2>
+            
+            <!-- This section shows for AVAILABLE slots -->
+            <div id="available-slot-details">
+                <p>You can modify the time range or delete this available slot.</p>
+                <div class="form-group">
+                    <label for="event-start-time">Start Time</label>
+                    <input type="datetime-local" id="event-start-time">
+                </div>
+                <div class="form-group">
+                    <label for="event-end-time">End Time</label>
+                    <input type="datetime-local" id="event-end-time">
+                </div>
+                <div class="button-group">
+                    <button id="save-event-btn" class="action-btn add-btn">Save Changes</button>
+                    <button id="delete-event-btn" class="action-btn remove-btn">Delete Slot</button>
+                </div>
+            </div>
+
+            <!-- This section shows for BOOKED slots -->
+			<div id="booked-slot-details">
+				<p>This lesson has been booked. You can cancel the booking to make the slot available again.</p>
+				<p><strong>Booked by:</strong> <span id="booked-by-email">Loading...</span></p>
+				
+				<div class="meeting-link-container" style="margin-bottom: 1rem;">
+					<strong><i class="fa-solid fa-video"></i> Student's Google Meet Link:</strong>
+					<p><a id="admin-meeting-link" href="#" target="_blank">Loading...</a></p>
+				</div>
+
+				<div class="button-group">
+					<button id="cancel-booking-btn" class="action-btn remove-btn">Cancel Booking</button>
+				</div>
+			</div>
+
+            <button id="close-event-modal-btn">Close</button>
+        </div>
+    </div>
+
     <script type="module" src="/src/admin.js"></script>
 </body>
 </html>
