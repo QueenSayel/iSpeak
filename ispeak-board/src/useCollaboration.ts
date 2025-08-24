@@ -1,14 +1,18 @@
 // src/useCollaboration.ts
 
 import { Editor } from 'tldraw'
-import type { TLEventInfo, TLRecord, TLStoreEventInfo } from 'tldraw'
+import type { TLEventInfo, TLRecord, TLStoreEventInfo, TLShapeId, TLPageId } from 'tldraw'
 import { useEffect } from 'react'
 import { supabase } from './supabaseClient'
 
+// The data we broadcast to other users
 type Awareness = {
-    // Only send the minimal data needed over the network
-    cursor: { x: number; y: number }
     user: { name: string; color: string }
+    cursor: { x: number; y: number }
+    camera: { x: number; y: number; z: number }
+    screenBounds: { x: number, y: number, w: number, h: number }
+    selectedShapeIds: TLShapeId[]
+    currentPageId: TLPageId
 }
 
 export function useCollaboration(editor: Editor | undefined, boardId: string | null) {
@@ -45,7 +49,7 @@ export function useCollaboration(editor: Editor | undefined, boardId: string | n
 		  })
 		})
         
-        // --- HANDLING PRESENCE (CURSORS) --- 
+        // --- HANDLING PRESENCE (CURSORS, CAMERAS, etc.) (Unchanged from last version) --- 
         channel.on('presence', { event: 'sync' }, () => {
             const presenceState = channel.presenceState<Awareness>()
             const presences: TLRecord[] = []
@@ -54,34 +58,43 @@ export function useCollaboration(editor: Editor | undefined, boardId: string | n
                 if (key === presenceKey) continue
 
                 const presence = presenceState[key][0]
-                if (presence?.cursor && presence?.user) {
+                if (presence?.cursor && presence?.user && presence?.camera && presence.screenBounds) {
                     presences.push({
                         id: `instance_presence:${key}`,
                         typeName: 'instance_presence',
                         userId: key,
                         userName: presence.user.name,
-                        // --- FIX: Construct the full cursor object required by the tldraw schema ---
+                        lastActivityTimestamp: Date.now(),
+                        color: presence.user.color,
+                        camera: presence.camera,
+                        screenBounds: presence.screenBounds,
+                        followingUserId: null,
                         cursor: {
                             x: presence.cursor.x,
                             y: presence.cursor.y,
-                            type: 'default', // Add the missing 'type' property
-                            rotation: 0,     // Add the missing 'rotation' property
+                            type: 'default',
+                            rotation: 0,
                         },
-                        color: presence.user.color,
-                        lastActivityTimestamp: Date.now(),
-                        followingUserId: null,
+                        selectedShapeIds: presence.selectedShapeIds,
+                        currentPageId: presence.currentPageId,
                     } as TLRecord)
                 }
             }
             editor.store.put(presences)
         })
 
-        // --- TRACKING OUR OWN CURSOR (Unchanged) ---
+        // --- TRACKING OUR OWN PRESENCE STATE ---
         const eventListener = (info: TLEventInfo) => {
-            if (info.name === 'pointer_move') {
+            // FIX: Use the 'tick' event to capture all user interactions efficiently.
+            if (info.name === 'tick') {
+                // FIX: Use getter methods to access editor state properties.
                 channel.track({
-                    cursor: editor.inputs.currentScreenPoint,
                     user: { name: 'Anonymous User', color: '#ff69b4' },
+                    cursor: editor.inputs.currentScreenPoint,
+                    camera: editor.getCamera(),
+                    screenBounds: editor.getViewportScreenBounds(),
+                    selectedShapeIds: editor.getSelectedShapeIds(),
+                    currentPageId: editor.getCurrentPageId(),
                 })
             }
         }
