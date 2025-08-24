@@ -51,31 +51,46 @@ function LoadingScreen() {
 function BoardSwitcher({ currentBoardId }: { currentBoardId: string | null }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [boards, setBoards] = useState<{ id: string, name: string }[]>([]);
+  const [userRole, setUserRole] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchAccessibleBoards = async () => {
-      const { data, error } = await supabase
+    const fetchData = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single();
+      
+      if (profileError) {
+        console.error('Error fetching user role:', profileError);
+      } else {
+        setUserRole(profile.role);
+      }
+      
+      const { data: boardsData, error: boardsError } = await supabase
         .from('boards')
         .select('id, name')
         .order('created_at', { ascending: false });
 
-      if (error) {
-        console.error('Error fetching board list:', error);
+      if (boardsError) {
+        console.error('Error fetching board list:', boardsError);
       } else {
-        setBoards(data || []);
+        setBoards(boardsData || []);
       }
     };
-    fetchAccessibleBoards();
+    fetchData();
   }, []);
 
+  const dashboardLink = userRole === 'admin' ? '/admin' : '/student';
+
   return (
-    // We add the 'expanded' class based on our state
-    // and the mouse leave event to the container itself
     <div 
       className={`board-switcher ${isExpanded ? 'expanded' : ''}`}
       onMouseLeave={() => setIsExpanded(false)}
     >
-      {/* The mouse enter event is ONLY on the visible tab */}
 	<div 
 	  className="switcher-tab"
 	  onMouseEnter={() => setIsExpanded(true)}
@@ -100,6 +115,10 @@ function BoardSwitcher({ currentBoardId }: { currentBoardId: string | null }) {
             <li>No boards accessible.</li>
           )}
         </ul>
+        <a href={dashboardLink} className="dashboard-link">
+          <i className="fa-solid fa-arrow-left"></i>
+          Dashboard
+        </a>
       </div>
     </div>
   );
