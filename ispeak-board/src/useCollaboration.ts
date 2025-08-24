@@ -65,12 +65,18 @@ export function useCollaboration(editor: Editor | undefined, boardId: string | n
       const presencesToPut: TLRecord[] = []
       const presencesToRemove: TLRecord['id'][] = []
 
-      const presentIdsInStore = editor.store.query.records('instance_presence').get().map(p => p.userId)
+      const presentIdsInStore = editor.store
+        .query.records('instance_presence')
+        .get()
+        .map(p => p.userId as TLShapeId) // ✅ cast to branded type
+
       const incomingIds = new Set(Object.keys(presenceState))
 
       // Remove departed users
       for (const id of presentIdsInStore) {
-        if (!incomingIds.has(id)) presencesToRemove.push(`instance_presence:${id}`)
+        if (!incomingIds.has(id)) {
+          presencesToRemove.push(`instance_presence:${id}` as TLRecord['id']) // ✅ cast to branded type
+        }
       }
       if (presencesToRemove.length) editor.store.remove(presencesToRemove)
 
@@ -83,10 +89,10 @@ export function useCollaboration(editor: Editor | undefined, boardId: string | n
         const cursor = presence.cursor
           ? { x: presence.cursor.x, y: presence.cursor.y, type: presence.cursor.type || 'default', rotation: 0 }
           : null
-        const camera = presence.camera || { x: 0, y: 0, z: 1 } // <--- ONLY x,y,z
+        const camera = presence.camera || { x: 0, y: 0, z: 1 }
 
         presencesToPut.push({
-          id: `instance_presence:${presence.id}`,
+          id: `instance_presence:${presence.id}` as TLRecord['id'],
           typeName: 'instance_presence',
           userId: presence.id,
           userName: presence.name,
