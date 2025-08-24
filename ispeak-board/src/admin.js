@@ -38,12 +38,12 @@ let currentSelectedEvent = null;
 // --- AUTH GUARD (Checks for admin role) ---
 async function checkAdminAuth() {
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-    if (sessionError || !session) { window.location.href = '/board/login.html'; return; }
+    if (sessionError || !session) { window.location.href = '/login'; return; }
     const { data: profile, error: profileError } = await supabase.from('profiles').select('id, role').eq('id', session.user.id).single();
     if (profileError || !profile || profile.role !== 'admin') {
         alert('Access Denied. You do not have administrator privileges.');
         await supabase.auth.signOut();
-        window.location.href = '/board/login.html';
+        window.location.href = '/login';
     } else {
         adminProfile = profile; // Store the admin's profile for later
     }
@@ -395,7 +395,7 @@ closeModalBtn.addEventListener('click', () => {
 
 logoutBtn.addEventListener('click', async () => {
     await supabase.auth.signOut();
-    window.location.href = '/board/login.html';
+    window.location.href = '/login';
 });
 
 // --- INITIALIZE THE PAGE ---
@@ -406,3 +406,4 @@ async function init() {
 	initializeCalendar();
 }
 init();
+
