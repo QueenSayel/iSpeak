@@ -1,7 +1,7 @@
 // src/useCollaboration.ts
 
 import { Editor } from 'tldraw'
-import type { TLRecord, TLStoreEventInfo, TLShapeId, TLPageId } from 'tldraw'
+import type { TLEventInfo, TLRecord, TLStoreEventInfo, TLShapeId, TLPageId } from 'tldraw'
 import { useEffect, useState } from 'react'
 import { supabase } from './supabaseClient'
 
@@ -70,9 +70,7 @@ export function useCollaboration(editor: Editor | undefined, boardId: string | n
 
       // Remove departed users
       for (const id of presentIdsInStore) {
-        if (!incomingIds.has(id)) {
-          presencesToRemove.push(`instance_presence:${id}` as TLRecord['id'])
-        }
+        if (!incomingIds.has(id)) presencesToRemove.push(`instance_presence:${id}`)
       }
       if (presencesToRemove.length) editor.store.remove(presencesToRemove)
 
@@ -85,10 +83,10 @@ export function useCollaboration(editor: Editor | undefined, boardId: string | n
         const cursor = presence.cursor
           ? { x: presence.cursor.x, y: presence.cursor.y, type: presence.cursor.type || 'default', rotation: 0 }
           : null
-        const camera = presence.camera || { x: 0, y: 0, z: 1 }
+        const camera = presence.camera || { x: 0, y: 0, z: 1 } // <--- ONLY x,y,z
 
         presencesToPut.push({
-          id: `instance_presence:${presence.id}` as TLRecord['id'],
+          id: `instance_presence:${presence.id}`,
           typeName: 'instance_presence',
           userId: presence.id,
           userName: presence.name,
