@@ -6,6 +6,7 @@ import { useEffect } from 'react'
 import { supabase } from './supabaseClient'
 
 type Awareness = {
+    // Only send the minimal data needed over the network
     cursor: { x: number; y: number }
     user: { name: string; color: string }
 }
@@ -23,11 +24,10 @@ export function useCollaboration(editor: Editor | undefined, boardId: string | n
             },
         })
 
-		// --- BROADCASTING LOCAL CHANGES ---
+		// --- BROADCASTING LOCAL CHANGES (Unchanged) ---
 		const unlisten = editor.store.listen(
 		  (event: TLStoreEventInfo) => {
 			if (event.source !== 'user') return
-
 			channel.send({
 			  type: 'broadcast',
 			  event: 'tldraw-changes',
@@ -37,10 +37,9 @@ export function useCollaboration(editor: Editor | undefined, boardId: string | n
 		  { source: 'user', scope: 'document' }
 		)
 
-		// --- RECEIVING AND APPLYING REMOTE CHANGES ---
+		// --- RECEIVING AND APPLYING REMOTE CHANGES (Unchanged) ---
 		channel.on('broadcast', { event: 'tldraw-changes' }, ({ payload }) => {
 		  console.log('Received remote changes:', payload)
-
 		  editor.store.mergeRemoteChanges(() => {
 			editor.store.applyDiff(payload)
 		  })
@@ -61,10 +60,15 @@ export function useCollaboration(editor: Editor | undefined, boardId: string | n
                         typeName: 'instance_presence',
                         userId: key,
                         userName: presence.user.name,
-                        cursor: presence.cursor,
+                        // --- FIX: Construct the full cursor object required by the tldraw schema ---
+                        cursor: {
+                            x: presence.cursor.x,
+                            y: presence.cursor.y,
+                            type: 'default', // Add the missing 'type' property
+                            rotation: 0,     // Add the missing 'rotation' property
+                        },
                         color: presence.user.color,
                         lastActivityTimestamp: Date.now(),
-                        // --- FIX: Add the missing property required by the tldraw schema ---
                         followingUserId: null,
                     } as TLRecord)
                 }
@@ -72,7 +76,7 @@ export function useCollaboration(editor: Editor | undefined, boardId: string | n
             editor.store.put(presences)
         })
 
-        // --- TRACKING OUR OWN CURSOR ---
+        // --- TRACKING OUR OWN CURSOR (Unchanged) ---
         const eventListener = (info: TLEventInfo) => {
             if (info.name === 'pointer_move') {
                 channel.track({
@@ -84,14 +88,14 @@ export function useCollaboration(editor: Editor | undefined, boardId: string | n
         
         editor.on('event', eventListener)
 
-        // --- SUBSCRIBE TO THE CHANNEL ---
+        // --- SUBSCRIBE TO THE CHANNEL (Unchanged) ---
         channel.subscribe(async (status) => {
             if (status === 'SUBSCRIBED') {
                 console.log(`Subscribed to channel: board:${boardId}`)
             }
         })
 
-        // --- CLEANUP ---
+        // --- CLEANUP (Unchanged) ---
         return () => {
             unlisten()
             editor.off('event', eventListener)
