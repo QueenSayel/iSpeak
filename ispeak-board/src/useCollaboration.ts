@@ -6,7 +6,7 @@ import { useEffect } from 'react'
 import { supabase } from './supabaseClient'
 
 type Awareness = {
-  cursor: { x: number; y: number }
+  cursor: { x: number; y: number } | null
   user: { name: string; color: string }
 }
 
@@ -14,7 +14,6 @@ export function useCollaboration(editor: Editor | undefined, boardId: string | n
   useEffect(() => {
     if (!editor || !boardId) return
 
-    // unique presence key for this browser tab
     const presenceKey = `user-${Math.random().toString(36).slice(2, 11)}`
 
     const channel = supabase.channel(`board:${boardId}`, {
@@ -31,7 +30,7 @@ export function useCollaboration(editor: Editor | undefined, boardId: string | n
         channel.send({
           type: 'broadcast',
           event: 'tldraw-changes',
-          payload: event.changes, // send the diff only
+          payload: event.changes, // send only the diff
         })
       },
       { source: 'user', scope: 'document' }
@@ -44,18 +43,20 @@ export function useCollaboration(editor: Editor | undefined, boardId: string | n
       })
     })
 
-    // Helper: rebuild presence list from current Supabase presence state
+    // Helper to rebuild all peer presences
     const rebuildPresences = () => {
       const presenceState = channel.presenceState<Awareness>()
       const presences: TLRecord[] = []
-
       const currentPageId = editor.getCurrentPageId()
+      const camera = editor.getCamera() // must be an object
 
       for (const key in presenceState) {
-        if (key === presenceKey) continue // don't render our own cursor
+        if (key === presenceKey) continue
 
         const p = presenceState[key]?.[0]
-        if (!p?.cursor || !p?.user) continue
+        if (!p?.user) continue
+
+        const hasCursor = !!p.cursor
 
         presences.push({
           id: `instance_presence:${key}`,
@@ -64,39 +65,38 @@ export function useCollaboration(editor: Editor | undefined, boardId: string | n
           userName: p.user.name,
           color: p.user.color,
 
-          // REQUIRED FIELDS IN TLInstancePresence:
-          currentPageId,                // must be set
-          camera: null,                 // we are not syncing camera; null is valid
-          cursor: {
-            x: p.cursor.x,
-            y: p.cursor.y,
-            type: 'default',
-            rotation: 0,
-          },
-          screenBounds: null,           // null is valid
-          scribbles: [],                // empty array is valid
-          selectedShapeIds: [],         // empty array is valid
-          meta: {},                     // empty object is valid
+          // required presence fields in 3.15.x:
+          currentPageId,
+          camera,                // must be an object (not undefined)
+          screenBounds: null,    // ok to be null
+          brush: null,           // REQUIRED: include this, null is fine
+          scribbles: [],         // empty array is fine
+          selectedShapeIds: [],  // empty array is fine
+          meta: {},              // empty object is fine
 
-          // Nice-to-have / optional fields:
-          chatMessage: null as any,
+          cursor: hasCursor
+            ? {
+                x: p.cursor!.x,
+                y: p.cursor!.y,
+                type: 'default',
+                rotation: 0,
+              }
+            : null,
+
           followingUserId: null,
           lastActivityTimestamp: Date.now(),
         } as TLRecord)
       }
 
-      // Put all peer presences at once (replace any previous ones)
       editor.store.put(presences)
     }
 
     // --- 3) RECEIVE PRESENCE EVENTS (CURSORS) --------------------------------
-    // Rebuild on full sync, join, and leave to stay consistent.
     channel.on('presence', { event: 'sync' }, rebuildPresences)
     channel.on('presence', { event: 'join' }, rebuildPresences)
     channel.on('presence', { event: 'leave' }, rebuildPresences)
 
     // --- 4) TRACK OUR OWN CURSOR ---------------------------------------------
-    // Track on pointer move; use PAGE coordinates to match tldraw expectations.
     const eventListener = (info: TLEventInfo) => {
       if (info.name === 'pointer_move') {
         channel.track({
@@ -107,10 +107,9 @@ export function useCollaboration(editor: Editor | undefined, boardId: string | n
     }
     editor.on('event', eventListener)
 
-    // Optional: send an initial presence so others can see you before you move.
+    // send an initial presence (no cursor until first move)
     channel.subscribe((status) => {
       if (status === 'SUBSCRIBED') {
-        // push an initial presence (no cursor until first move)
         channel.track({
           cursor: null,
           user: { name: 'Anonymous User', color: '#ff69b4' },
@@ -118,7 +117,6 @@ export function useCollaboration(editor: Editor | undefined, boardId: string | n
       }
     })
 
-    // --- CLEANUP --------------------------------------------------------------
     return () => {
       unlisten()
       editor.off('event', eventListener)
