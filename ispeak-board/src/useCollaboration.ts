@@ -1,104 +1,118 @@
 // src/useCollaboration.ts
 
-// Import helpers from tldraw's state management library
-import { atom, react } from '@tldraw/state'
-import {
-	Editor,
-	createPresenceStateDerivation,
-	// Import the specific types we need
-	type TLInstancePresence,
-	type TLRecord,
-	type TLStoreEventInfo,
-	type TLPresenceUserInfo,
-} from 'tldraw'
+import { Editor } from 'tldraw'
+import type { TLEventInfo, TLRecord, TLStoreEventInfo, TLShapeId, TLPageId } from 'tldraw'
 import { useEffect } from 'react'
 import { supabase } from './supabaseClient'
 
-// The data we'll send over the wire. We omit the fields that are static.
-type Awareness = Omit<TLInstancePresence, 'id' | 'typeName'>
+// The data we broadcast to other users
+type Awareness = {
+    user: { name: string; color: string }
+    cursor: { x: number; y: number }
+    camera: { x: number; y: number; z: number }
+    screenBounds: { x: number, y: number, w: number, h: number }
+    selectedShapeIds: TLShapeId[]
+    currentPageId: TLPageId
+}
 
 export function useCollaboration(editor: Editor | undefined, boardId: string | null) {
-	useEffect(() => {
-		if (!editor || !boardId) return
+    useEffect(() => {
+        if (!editor || !boardId) return
+        
+        const presenceKey = `user-${Math.random().toString(36).substr(2, 9)}`
 
-		// Use the editor's unique instance ID as the key for this user's session.
-		const presenceKey = editor.instanceId
+        const channel = supabase.channel(`board:${boardId}`, {
+            config: {
+                broadcast: { self: false },
+                presence: { key: presenceKey },
+            },
+        })
 
-		// Create a reactive "atom" for our user info. This is required by the helper.
-		const userInfo = atom<TLPresenceUserInfo>('user info', {
-			id: editor.user.id,
-			name: 'Anonymous User',
-			color: '#ff69b4',
-		})
-
-		// The official tldraw helper function to derive the complete, valid presence state.
-		const presenceDerivation = createPresenceStateDerivation(userInfo)(editor.store)
-
-		const channel = supabase.channel(`board:${boardId}`, {
-			config: {
-				broadcast: { self: false },
-				presence: { key: presenceKey },
-			},
-		})
-
-		// --- BROADCASTING LOCAL CHANGES (Shapes, etc.) ---
-		const unlistenChanges = editor.store.listen(
-			(event: TLStoreEventInfo) => {
-				if (event.source !== 'user') return
-				channel.send({
-					type: 'broadcast',
-					event: 'tldraw-changes',
-					payload: event.changes,
-				})
-			},
-			{ source: 'user', scope: 'document' }
+		// --- BROADCASTING LOCAL CHANGES (Unchanged) ---
+		const unlisten = editor.store.listen(
+		  (event: TLStoreEventInfo) => {
+			if (event.source !== 'user') return
+			channel.send({
+			  type: 'broadcast',
+			  event: 'tldraw-changes',
+			  payload: event.changes,
+			})
+		  },
+		  { source: 'user', scope: 'document' }
 		)
 
-		// --- RECEIVING AND APPLYING REMOTE CHANGES ---
+		// --- RECEIVING AND APPLYING REMOTE CHANGES (Unchanged) ---
 		channel.on('broadcast', { event: 'tldraw-changes' }, ({ payload }) => {
-			editor.store.mergeRemoteChanges(() => {
-				editor.store.applyDiff(payload)
-			})
+		  console.log('Received remote changes:', payload)
+		  editor.store.mergeRemoteChanges(() => {
+			editor.store.applyDiff(payload)
+		  })
 		})
+        
+        // --- HANDLING PRESENCE (CURSORS, CAMERAS, etc.) (Unchanged from last version) --- 
+        channel.on('presence', { event: 'sync' }, () => {
+            const presenceState = channel.presenceState<Awareness>()
+            const presences: TLRecord[] = []
+            
+            for (const key in presenceState) {
+                if (key === presenceKey) continue
 
-		// --- HANDLING REMOTE USER PRESENCE ---
-		channel.on('presence', { event: 'sync' }, () => {
-			const presenceState = channel.presenceState<Awareness>()
-			const presences: TLInstancePresence[] = []
+                const presence = presenceState[key][0]
+                if (presence?.cursor && presence?.user && presence?.camera && presence.screenBounds) {
+                    presences.push({
+                        id: `instance_presence:${key}`,
+                        typeName: 'instance_presence',
+                        userId: key,
+                        userName: presence.user.name,
+                        lastActivityTimestamp: Date.now(),
+                        color: presence.user.color,
+                        camera: presence.camera,
+                        screenBounds: presence.screenBounds,
+                        followingUserId: null,
+                        cursor: {
+                            x: presence.cursor.x,
+                            y: presence.cursor.y,
+                            type: 'default',
+                            rotation: 0,
+                        },
+                        selectedShapeIds: presence.selectedShapeIds,
+                        currentPageId: presence.currentPageId,
+                    } as TLRecord)
+                }
+            }
+            editor.store.put(presences)
+        })
 
-			for (const userId in presenceState) {
-				if (userId === presenceKey) continue
-				const presence = presenceState[userId][0]
-				if (presence) {
-					// Reconstruct the full record before putting it in the store
-					presences.push({
-						id: editor.store.id.createPresenceId(userId),
-						typeName: 'instance_presence',
-						...presence,
-					})
-				}
-			}
-			editor.store.put(presences)
-		})
+        // --- TRACKING OUR OWN PRESENCE STATE ---
+        const eventListener = (info: TLEventInfo) => {
+            // FIX: Use the 'tick' event to capture all user interactions efficiently.
+            if (info.name === 'tick') {
+                // FIX: Use getter methods to access editor state properties.
+                channel.track({
+                    user: { name: 'Anonymous User', color: '#ff69b4' },
+                    cursor: editor.inputs.currentScreenPoint,
+                    camera: editor.getCamera(),
+                    screenBounds: editor.getViewportScreenBounds(),
+                    selectedShapeIds: editor.getSelectedShapeIds(),
+                    currentPageId: editor.getCurrentPageId(),
+                })
+            }
+        }
+        
+        editor.on('event', eventListener)
 
-		// --- TRACKING AND BROADCASTING OUR OWN PRESENCE ---
-		// `react` is a tldraw state helper that runs a function whenever the derived presence state changes.
-		const stopTracking = react('track presence', () => {
-			const presence = presenceDerivation.get()
-			if (presence) {
-				// We only send the dynamic parts of our presence state.
-				const { id, typeName, ...payload } = presence
-				channel.track(payload)
-			}
-		})
+        // --- SUBSCRIBE TO THE CHANNEL (Unchanged) ---
+        channel.subscribe(async (status) => {
+            if (status === 'SUBSCRIBED') {
+                console.log(`Subscribed to channel: board:${boardId}`)
+            }
+        })
 
-		// --- SUBSCRIBE AND CLEANUP ---
-		channel.subscribe()
-
-		return () => {
-			unlistenChanges()
-			stopTracking() // Clean up the reaction
-			supabase.removeChannel(channel)
-		}
-	}, [editor, boardId])
+        // --- CLEANUP (Unchanged) ---
+        return () => {
+            unlisten()
+            editor.off('event', eventListener)
+            supabase.removeChannel(channel)
+        }
+    }, [editor, boardId])
 }
