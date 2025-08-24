@@ -29,14 +29,14 @@ let currentSelectedEvent = null;
 async function checkAuth() {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
-        window.location.href = '/board/login.html';
+        window.location.href = '/login';
         return;
     }
     const { data, error } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
     if (error || !data) {
         console.error('Could not fetch user profile:', error);
         await supabase.auth.signOut();
-        window.location.href = '/board/login.html';
+        window.location.href = '/login';
     } else {
         userProfile = data;
     }
@@ -176,7 +176,7 @@ async function fetchMyBoards() {
 // --- LOGOUT (Unchanged) ---
 logoutBtn.addEventListener('click', async () => {
     await supabase.auth.signOut();
-    window.location.href = '/board/login.html';
+    window.location.href = '/login';
 });
 
 // --- INITIALIZE THE PAGE ---
@@ -187,3 +187,4 @@ async function init() {
 }
 
 init();
+
