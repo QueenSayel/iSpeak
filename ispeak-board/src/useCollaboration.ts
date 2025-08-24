@@ -1,7 +1,8 @@
 // src/useCollaboration.ts
 
-import { Editor } from 'tldraw'
-import type { TLEventInfo, TLRecord, TLStoreEventInfo, TLShapeId, TLPageId } from 'tldraw'
+import { Editor, createPresenceId, createRecordId } from 'tldraw'
+// CORRECTED: Remove unused 'TLEventInfo' and add the necessary ID helpers
+import type { TLRecord, TLStoreEventInfo, TLShapeId, TLPageId, TLAssetId, TLBindingId, TLRecordId } from 'tldraw'
 import { useEffect, useState } from 'react'
 import { supabase } from './supabaseClient'
 
@@ -32,7 +33,6 @@ export function useCollaboration(editor: Editor | undefined, boardId: string | n
     const fetchUser = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (user) {
-        console.log('%c[DEBUG] User identified:', 'color: green;', user.email)
         setUser({ id: user.id, email: user.email || 'Anonymous' })
       } else {
         console.error('[DEBUG] No user found!')
@@ -63,14 +63,16 @@ export function useCollaboration(editor: Editor | undefined, boardId: string | n
     channel.on('presence', { event: 'sync' }, () => {
       const presenceState = channel.presenceState<Awareness>()
       const presencesToPut: TLRecord[] = []
-      const presencesToRemove: TLRecord['id'][] = []
+      const presencesToRemove: TLRecordId[] = [] // Use TLRecordId type
 
-      const presentIdsInStore = editor.store.query.records('instance_presence').get().map(p => p.userId)
-      const incomingIds = new Set(Object.keys(presenceState))
+      const presentIdsInStore = editor.store.query.records('instance_presence').get().map(p => p.id)
+      const incomingIds = new Set(Object.keys(presenceState).map(key => createPresenceId(key)))
 
       // Remove departed users
       for (const id of presentIdsInStore) {
-        if (!incomingIds.has(id)) presencesToRemove.push(`instance_presence:${id}`)
+        if (!incomingIds.has(id)) {
+            presencesToRemove.push(id)
+        }
       }
       if (presencesToRemove.length) editor.store.remove(presencesToRemove)
 
@@ -82,11 +84,14 @@ export function useCollaboration(editor: Editor | undefined, boardId: string | n
 
         const cursor = presence.cursor
           ? { x: presence.cursor.x, y: presence.cursor.y, type: presence.cursor.type || 'default', rotation: 0 }
-          : null
-        const camera = presence.camera || { x: 0, y: 0, z: 1 } // <--- ONLY x,y,z
+          : { x: 0, y: 0, type: 'default', rotation: 0 } // Provide a default cursor
 
+        const camera = presence.camera || { x: 0, y: 0, z: 1 }
+
+        // --- THE FIX ---
+        // We now use `createPresenceId` to create a correctly-typed ID.
         presencesToPut.push({
-          id: `instance_presence:${presence.id}`,
+          id: createPresenceId(presence.id), // Correctly typed ID
           typeName: 'instance_presence',
           userId: presence.id,
           userName: presence.name,
@@ -115,8 +120,8 @@ export function useCollaboration(editor: Editor | undefined, boardId: string | n
       if (now - lastSent < 33) return
       lastSent = now
 
-      const pt = editor.inputs.currentScreenPoint || { x: 0, y: 0 }
-      const cursor = { x: pt.x, y: pt.y, type: 'default', rotation: 0 }
+      const pt = editor.inputs.currentScreenPoint
+      const cursor = pt ? { x: pt.x, y: pt.y, type: 'default', rotation: 0 } : null
       const cam = editor.getCamera()
       const camera = cam ? { x: cam.x, y: cam.y, z: cam.z } : { x: 0, y: 0, z: 1 }
 
@@ -136,7 +141,6 @@ export function useCollaboration(editor: Editor | undefined, boardId: string | n
 
     channel.subscribe(status => {
       if (status === 'SUBSCRIBED') {
-        console.log(`Subscribed to channel: board:${boardId}`)
         sendPresence()
       }
     })
