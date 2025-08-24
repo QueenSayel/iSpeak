@@ -57,9 +57,9 @@ loginForm.addEventListener('submit', async (e) => {
 
     // Redirect based on the role
     if (profile.role === 'admin') {
-        window.location.href = '/board/admin.html';
+        window.location.href = '/admin';
     } else {
-        window.location.href = '/board/student.html';
+        window.location.href = '/student';
     }
 });
 
@@ -80,4 +80,5 @@ signupForm.addEventListener('submit', async (e) => {
         messageEl.style.color = 'green';
         messageEl.textContent = 'Success! Please check your email to confirm your account.';
     }
+
 });
