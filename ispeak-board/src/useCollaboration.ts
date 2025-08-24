@@ -1,13 +1,10 @@
 // src/useCollaboration.ts
 
 import { Editor } from 'tldraw'
-// Import ALL necessary types directly from the main 'tldraw' package.
-// This is the correct approach for tldraw v3, as it re-exports the most important types.
 import type { TLEventInfo, TLRecord, TLStoreEventInfo } from 'tldraw'
 import { useEffect } from 'react'
 import { supabase } from './supabaseClient'
 
-// This type definition remains the same.
 type Awareness = {
     cursor: { x: number; y: number }
     user: { name: string; color: string }
@@ -16,17 +13,21 @@ type Awareness = {
 export function useCollaboration(editor: Editor | undefined, boardId: string | null) {
     useEffect(() => {
         if (!editor || !boardId) return
+        
+        // --- FIX: Store the presence key in a variable ---
+        const presenceKey = `user-${Math.random().toString(36).substr(2, 9)}`
 
         const channel = supabase.channel(`board:${boardId}`, {
             config: {
                 broadcast: { self: false },
-                presence: { key: `user-${Math.random().toString(36).substr(2, 9)}` },
+                // --- FIX: Use the variable to set the presence key ---
+                presence: { key: presenceKey },
             },
         })
 
-		// --- BROADCASTING LOCAL CHANGES ---
+		// --- BROADCASTING LOCAL CHANGES (No changes here) ---
 		const unlisten = editor.store.listen(
-		  (event: TLStoreEventInfo) => { // TLStoreEventInfo is the correct generic type here
+		  (event: TLStoreEventInfo) => {
 			if (event.source !== 'user') return
 
 			channel.send({
@@ -38,7 +39,7 @@ export function useCollaboration(editor: Editor | undefined, boardId: string | n
 		  { source: 'user', scope: 'document' }
 		)
 
-		// --- RECEIVING AND APPLYING REMOTE CHANGES ---
+		// --- RECEIVING AND APPLYING REMOTE CHANGES (No changes here) ---
 		channel.on('broadcast', { event: 'tldraw-changes' }, ({ payload }) => {
 		  console.log('Received remote changes:', payload)
 
@@ -53,9 +54,8 @@ export function useCollaboration(editor: Editor | undefined, boardId: string | n
             const presences: TLRecord[] = []
             
             for (const key in presenceState) {
-                // The error about 'key' not existing on RealtimePresence was a red herring.
-                // TypeScript was confused by other errors. This code is correct.
-                if (key === channel.presence.key) continue
+                // --- FIX: Use the variable to filter out our own presence ---
+                if (key === presenceKey) continue
 
                 const presence = presenceState[key][0]
                 if (presence?.cursor && presence?.user) {
@@ -73,13 +73,10 @@ export function useCollaboration(editor: Editor | undefined, boardId: string | n
             editor.store.put(presences)
         })
 
-        // --- TRACKING OUR OWN CURSOR ---
-        // The event listener API has changed significantly.
-        // We listen for the generic 'event' and then check its name.
+        // --- TRACKING OUR OWN CURSOR (No changes here) ---
         const eventListener = (info: TLEventInfo) => {
             if (info.name === 'pointer_move') {
                 channel.track({
-                    // We also get the point differently now.
                     cursor: editor.inputs.currentScreenPoint,
                     user: { name: 'Anonymous User', color: '#ff69b4' },
                 })
@@ -88,17 +85,16 @@ export function useCollaboration(editor: Editor | undefined, boardId: string | n
         
         editor.on('event', eventListener)
 
-        // --- SUBSCRIBE TO THE CHANNEL ---
+        // --- SUBSCRIBE TO THE CHANNEL (No changes here) ---
         channel.subscribe(async (status) => {
             if (status === 'SUBSCRIBED') {
                 console.log(`Subscribed to channel: board:${boardId}`)
             }
         })
 
-        // --- CLEANUP ---
+        // --- CLEANUP (No changes here) ---
         return () => {
             unlisten()
-            // The cleanup function for the new event listener
             editor.off('event', eventListener)
             supabase.removeChannel(channel)
         }
