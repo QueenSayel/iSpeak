@@ -1,9 +1,9 @@
 // src/useCollaboration.ts
 
-import { Editor } from 'tldraw'
+import { Editor, TLEventInfo } from 'tldraw'
 import { useEffect } from 'react'
 import { supabase } from './supabaseClient'
-import type { RealtimeChannel } from '@supabase/supabase-js' // type-only import
+import type { RealtimeChannel } from '@supabase/supabase-js'
 import type { TLRecord } from 'tldraw'
 
 // Data we broadcast via Supabase Presence
@@ -16,7 +16,6 @@ export function useCollaboration(editor: Editor | undefined, boardId: string | n
   useEffect(() => {
     if (!editor || !boardId) return
 
-    // A stable presence key for this client (per tab/session)
     const clientId = `user-${Math.random().toString(36).slice(2, 11)}`
 
     const channel: RealtimeChannel = supabase.channel(`board:${boardId}`, {
@@ -33,7 +32,7 @@ export function useCollaboration(editor: Editor | undefined, boardId: string | n
         channel.send({
           type: 'broadcast',
           event: 'tldraw-changes',
-          payload: entry.changes, // send only the diff
+          payload: entry.changes,
         })
       },
       { source: 'user', scope: 'document' }
@@ -42,7 +41,7 @@ export function useCollaboration(editor: Editor | undefined, boardId: string | n
     // --- 2) Apply remote changes ---
     channel.on('broadcast', { event: 'tldraw-changes' }, ({ payload }) => {
       editor.store.mergeRemoteChanges(() => {
-        editor.store.applyDiff(payload) // payload is the diff
+        editor.store.applyDiff(payload)
       })
     })
 
@@ -52,7 +51,7 @@ export function useCollaboration(editor: Editor | undefined, boardId: string | n
       const presences: TLRecord[] = []
 
       for (const key in state) {
-        if (key === clientId) continue // skip self
+        if (key === clientId) continue
         const p = state[key][0]
         if (p?.cursor) {
           presences.push({
@@ -62,7 +61,7 @@ export function useCollaboration(editor: Editor | undefined, boardId: string | n
             userName: p.user?.name ?? 'Guest',
             color: p.user?.color ?? '#4f46e5',
             cursor: p.cursor,
-            currentPageId: editor.getCurrentPageId(), // <- REQUIRED for cursor to show
+            currentPageId: editor.getCurrentPageId(),
             lastActivityTimestamp: Date.now(),
           } as TLRecord)
         }
@@ -71,9 +70,9 @@ export function useCollaboration(editor: Editor | undefined, boardId: string | n
       if (presences.length) editor.store.put(presences)
     })
 
-    // --- 4) Broadcast our own cursor on pointer moves ---
-    const offPointer = editor.on('pointer_move', (e) => {
-      if (!e) return
+    // --- 4) Broadcast our cursor ---
+    const offPointer = editor.on('pointer', (e: TLEventInfo & { point?: { x: number; y: number } }) => {
+      if (!e?.point) return
       channel.track({
         cursor: e.point,
         user: { name: 'Anonymous User', color: '#ff69b4' },
