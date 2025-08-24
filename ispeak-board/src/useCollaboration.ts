@@ -1,100 +1,104 @@
 // src/useCollaboration.ts
 
-import { Editor, createPresenceStateDerivation } from 'tldraw'
-import type { TLRecord, TLStoreEventInfo } from 'tldraw'
+// Import helpers from tldraw's state management library
+import { atom, react } from '@tldraw/state'
+import {
+	Editor,
+	createPresenceStateDerivation,
+	// Import the specific types we need
+	type TLInstancePresence,
+	type TLRecord,
+	type TLStoreEventInfo,
+	type TLPresenceUserInfo,
+} from 'tldraw'
 import { useEffect } from 'react'
 import { supabase } from './supabaseClient'
-import { RealtimeChannel } from '@supabase/supabase-js'
 
-// This is the data that will be sent over the wire. It's a subset of the full presence record.
-// We extract only the state that changes, not the static properties like id or typeName.
-type Awareness = Omit<TLRecord['instance_presence'], 'id' | 'typeName' | 'userId' | 'userName'>
+// The data we'll send over the wire. We omit the fields that are static.
+type Awareness = Omit<TLInstancePresence, 'id' | 'typeName'>
 
 export function useCollaboration(editor: Editor | undefined, boardId: string | null) {
-    useEffect(() => {
-        if (!editor || !boardId) return
+	useEffect(() => {
+		if (!editor || !boardId) return
 
-        const presenceKey = `user-${Math.random().toString(36).substr(2, 9)}`
-        const user = { name: 'Anonymous User', color: '#ff69b4' }
+		// Use the editor's unique instance ID as the key for this user's session.
+		const presenceKey = editor.instanceId
 
-        const channel = supabase.channel(`board:${boardId}`, {
-            config: {
-                broadcast: { self: false },
-                presence: { key: presenceKey },
-            },
-        })
+		// Create a reactive "atom" for our user info. This is required by the helper.
+		const userInfo = atom<TLPresenceUserInfo>('user info', {
+			id: editor.user.id,
+			name: 'Anonymous User',
+			color: '#ff69b4',
+		})
 
-		// --- BROADCASTING LOCAL CHANGES (Unchanged) ---
+		// The official tldraw helper function to derive the complete, valid presence state.
+		const presenceDerivation = createPresenceStateDerivation(userInfo)(editor.store)
+
+		const channel = supabase.channel(`board:${boardId}`, {
+			config: {
+				broadcast: { self: false },
+				presence: { key: presenceKey },
+			},
+		})
+
+		// --- BROADCASTING LOCAL CHANGES (Shapes, etc.) ---
 		const unlistenChanges = editor.store.listen(
-		  (event: TLStoreEventInfo) => {
-			if (event.source !== 'user') return
-			channel.send({
-			  type: 'broadcast',
-			  event: 'tldraw-changes',
-			  payload: event.changes,
-			})
-		  },
-		  { source: 'user', scope: 'document' }
+			(event: TLStoreEventInfo) => {
+				if (event.source !== 'user') return
+				channel.send({
+					type: 'broadcast',
+					event: 'tldraw-changes',
+					payload: event.changes,
+				})
+			},
+			{ source: 'user', scope: 'document' }
 		)
 
-		// --- RECEIVING AND APPLYING REMOTE CHANGES (Unchanged) ---
+		// --- RECEIVING AND APPLYING REMOTE CHANGES ---
 		channel.on('broadcast', { event: 'tldraw-changes' }, ({ payload }) => {
-		  console.log('Received remote changes:', payload)
-		  editor.store.mergeRemoteChanges(() => {
-			editor.store.applyDiff(payload)
-		  })
+			editor.store.mergeRemoteChanges(() => {
+				editor.store.applyDiff(payload)
+			})
 		})
-        
-        // --- HANDLING PRESENCE --- 
-        channel.on('presence', { event: 'sync' }, () => {
-            const presenceState = channel.presenceState<Awareness>()
-            const presences: TLRecord[] = []
-            
-            for (const key in presenceState) {
-                if (key === presenceKey) continue
 
-                const presence = presenceState[key][0]
-                if (presence) {
-                    // Reconstruct the full TLRecord from the broadcasted state
-                    presences.push({
-                        id: `instance_presence:${key}`,
-                        typeName: 'instance_presence',
-                        userId: key,
-                        userName: user.name, // In a real app, you'd send this too
-                        ...presence,
-                    })
-                }
-            }
-            // Put all received presence records into the store
-            editor.store.put(presences)
-        })
+		// --- HANDLING REMOTE USER PRESENCE ---
+		channel.on('presence', { event: 'sync' }, () => {
+			const presenceState = channel.presenceState<Awareness>()
+			const presences: TLInstancePresence[] = []
 
-        // --- THE OFFICIAL TLDRAW HELPER FOR PRESENCE ---
-        // This creates a reactive "atom" that automatically tracks all the
-        // properties needed for a valid presence record.
-        const presenceDerivation = createPresenceStateDerivation(user)(() => editor.store)
+			for (const userId in presenceState) {
+				if (userId === presenceKey) continue
+				const presence = presenceState[userId][0]
+				if (presence) {
+					// Reconstruct the full record before putting it in the store
+					presences.push({
+						id: editor.store.id.createPresenceId(userId),
+						typeName: 'instance_presence',
+						...presence,
+					})
+				}
+			}
+			editor.store.put(presences)
+		})
 
-        // --- TRACKING OUR OWN PRESENCE ---
-        // When our local presence changes, broadcast it to others.
-        const unlistenPresence = presenceDerivation.listen(({ value }) => {
-            if (value) {
-                // Remove properties that are specific to the local record
-                const { id, typeName, userId, ...payload } = value
-                channel.track(payload)
-            }
-        })
+		// --- TRACKING AND BROADCASTING OUR OWN PRESENCE ---
+		// `react` is a tldraw state helper that runs a function whenever the derived presence state changes.
+		const stopTracking = react('track presence', () => {
+			const presence = presenceDerivation.get()
+			if (presence) {
+				// We only send the dynamic parts of our presence state.
+				const { id, typeName, ...payload } = presence
+				channel.track(payload)
+			}
+		})
 
-        // --- SUBSCRIBE AND CLEANUP ---
-        channel.subscribe(async (status) => {
-            if (status === 'SUBSCRIBED') {
-                console.log(`Subscribed to channel: board:${boardId}`)
-            }
-        })
+		// --- SUBSCRIBE AND CLEANUP ---
+		channel.subscribe()
 
-        return () => {
-            unlistenChanges()
-            unlistenPresence()
-            supabase.removeChannel(channel)
-        }
-    }, [editor, boardId])
+		return () => {
+			unlistenChanges()
+			stopTracking() // Clean up the reaction
+			supabase.removeChannel(channel)
+		}
+	}, [editor, boardId])
 }
