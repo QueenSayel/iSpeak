@@ -1,126 +1,123 @@
 // src/useCollaboration.ts
 
 import { Editor } from 'tldraw'
-import type { TLEventInfo, TLRecord, TLStoreEventInfo } from 'tldraw'
+import type { TLEventInfo, TLRecord, TLStoreEventInfo, TLShapeId, TLPageId } from 'tldraw'
 import { useEffect } from 'react'
 import { supabase } from './supabaseClient'
 
+// --- STEP 1: EXPAND THE AWARENESS PAYLOAD ---
+// We need to broadcast more than just the cursor.
 type Awareness = {
-  cursor: { x: number; y: number } | null
-  user: { name: string; color: string }
+    user: { name: string; color: string }
+    cursor: { x: number; y: number }
+    camera: { x: number; y: number; z: number }
+    screenBounds: { x: number, y: number, w: number, h: number }
+    selectedShapeIds: TLShapeId[]
+    currentPageId: TLPageId
 }
 
 export function useCollaboration(editor: Editor | undefined, boardId: string | null) {
-  useEffect(() => {
-    if (!editor || !boardId) return
+    useEffect(() => {
+        if (!editor || !boardId) return
+        
+        const presenceKey = `user-${Math.random().toString(36).substr(2, 9)}`
 
-    const presenceKey = `user-${Math.random().toString(36).slice(2, 11)}`
-
-    const channel = supabase.channel(`board:${boardId}`, {
-      config: {
-        broadcast: { self: false },
-        presence: { key: presenceKey },
-      },
-    })
-
-    // --- 1) SEND LOCAL DIFFS -------------------------------------------------
-    const unlisten = editor.store.listen(
-      (event: TLStoreEventInfo) => {
-        if (event.source !== 'user') return
-        channel.send({
-          type: 'broadcast',
-          event: 'tldraw-changes',
-          payload: event.changes, // send only the diff
+        const channel = supabase.channel(`board:${boardId}`, {
+            config: {
+                broadcast: { self: false },
+                presence: { key: presenceKey },
+            },
         })
-      },
-      { source: 'user', scope: 'document' }
-    )
 
-    // --- 2) RECEIVE REMOTE DIFFS --------------------------------------------
-    channel.on('broadcast', { event: 'tldraw-changes' }, ({ payload }) => {
-      editor.store.mergeRemoteChanges(() => {
-        editor.store.applyDiff(payload)
-      })
-    })
+		// --- BROADCASTING LOCAL CHANGES (Unchanged) ---
+		const unlisten = editor.store.listen(
+		  (event: TLStoreEventInfo) => {
+			if (event.source !== 'user') return
+			channel.send({
+			  type: 'broadcast',
+			  event: 'tldraw-changes',
+			  payload: event.changes,
+			})
+		  },
+		  { source: 'user', scope: 'document' }
+		)
 
-    // Helper to rebuild all peer presences
-    const rebuildPresences = () => {
-      const presenceState = channel.presenceState<Awareness>()
-      const presences: TLRecord[] = []
-      const currentPageId = editor.getCurrentPageId()
-      const camera = editor.getCamera() // must be an object
+		// --- RECEIVING AND APPLYING REMOTE CHANGES (Unchanged) ---
+		channel.on('broadcast', { event: 'tldraw-changes' }, ({ payload }) => {
+		  console.log('Received remote changes:', payload)
+		  editor.store.mergeRemoteChanges(() => {
+			editor.store.applyDiff(payload)
+		  })
+		})
+        
+        // --- HANDLING PRESENCE (CURSORS) --- 
+        channel.on('presence', { event: 'sync' }, () => {
+            const presenceState = channel.presenceState<Awareness>()
+            const presences: TLRecord[] = []
+            
+            for (const key in presenceState) {
+                if (key === presenceKey) continue
 
-      for (const key in presenceState) {
-        if (key === presenceKey) continue
-
-        const p = presenceState[key]?.[0]
-        if (!p?.user) continue
-
-        const hasCursor = !!p.cursor
-
-        presences.push({
-          id: `instance_presence:${key}`,
-          typeName: 'instance_presence',
-          userId: key,
-          userName: p.user.name,
-          color: p.user.color,
-
-          // required presence fields in 3.15.x:
-          currentPageId,
-          camera,                // must be an object (not undefined)
-          screenBounds: null,    // ok to be null
-          brush: null,           // REQUIRED: include this, null is fine
-          scribbles: [],         // empty array is fine
-          selectedShapeIds: [],  // empty array is fine
-          meta: {},              // empty object is fine
-
-          cursor: hasCursor
-            ? {
-                x: p.cursor!.x,
-                y: p.cursor!.y,
-                type: 'default',
-                rotation: 0,
-              }
-            : null,
-
-          followingUserId: null,
-          lastActivityTimestamp: Date.now(),
-        } as TLRecord)
-      }
-
-      editor.store.put(presences)
-    }
-
-    // --- 3) RECEIVE PRESENCE EVENTS (CURSORS) --------------------------------
-    channel.on('presence', { event: 'sync' }, rebuildPresences)
-    channel.on('presence', { event: 'join' }, rebuildPresences)
-    channel.on('presence', { event: 'leave' }, rebuildPresences)
-
-    // --- 4) TRACK OUR OWN CURSOR ---------------------------------------------
-    const eventListener = (info: TLEventInfo) => {
-      if (info.name === 'pointer_move') {
-        channel.track({
-          cursor: editor.inputs.currentPagePoint, // page-space point
-          user: { name: 'Anonymous User', color: '#ff69b4' },
+                const presence = presenceState[key][0]
+                // Check for all the new data points before creating the record
+                if (presence?.cursor && presence?.user && presence?.camera && presence.screenBounds) {
+                    presences.push({
+                        id: `instance_presence:${key}`,
+                        typeName: 'instance_presence',
+                        userId: key,
+                        userName: presence.user.name,
+                        lastActivityTimestamp: Date.now(),
+                        color: presence.user.color,
+                        
+                        // --- STEP 3: RECONSTRUCT THE FULL RECORD ---
+                        // Use all the broadcasted data to create a valid presence record.
+                        camera: presence.camera,
+                        screenBounds: presence.screenBounds,
+                        followingUserId: null,
+                        cursor: {
+                            x: presence.cursor.x,
+                            y: presence.cursor.y,
+                            type: 'default',
+                            rotation: 0,
+                        },
+                        selectedShapeIds: presence.selectedShapeIds,
+                        currentPageId: presence.currentPageId,
+                    } as TLRecord)
+                }
+            }
+            editor.store.put(presences)
         })
-      }
-    }
-    editor.on('event', eventListener)
 
-    // send an initial presence (no cursor until first move)
-    channel.subscribe((status) => {
-      if (status === 'SUBSCRIBED') {
-        channel.track({
-          cursor: null,
-          user: { name: 'Anonymous User', color: '#ff69b4' },
+        // --- TRACKING OUR OWN CURSOR, CAMERA, ETC. ---
+        const eventListener = (info: TLEventInfo) => {
+            // We can track on multiple events, but pointer_move is the most frequent.
+            if (info.name === 'pointer_move' || info.name === 'zoom' || info.name === 'pan') {
+                // --- STEP 2: BROADCAST THE FULL AWARENESS STATE ---
+                channel.track({
+                    user: { name: 'Anonymous User', color: '#ff69b4' },
+                    cursor: editor.inputs.currentScreenPoint,
+                    camera: editor.camera,
+                    screenBounds: editor.viewportScreenBounds,
+                    selectedShapeIds: editor.selectedShapeIds,
+                    currentPageId: editor.currentPageId,
+                })
+            }
+        }
+        
+        editor.on('event', eventListener)
+
+        // --- SUBSCRIBE TO THE CHANNEL (Unchanged) ---
+        channel.subscribe(async (status) => {
+            if (status === 'SUBSCRIBED') {
+                console.log(`Subscribed to channel: board:${boardId}`)
+            }
         })
-      }
-    })
 
-    return () => {
-      unlisten()
-      editor.off('event', eventListener)
-      supabase.removeChannel(channel)
-    }
-  }, [editor, boardId])
+        // --- CLEANUP (Unchanged) ---
+        return () => {
+            unlisten()
+            editor.off('event', eventListener)
+            supabase.removeChannel(channel)
+        }
+    }, [editor, boardId])
 }
