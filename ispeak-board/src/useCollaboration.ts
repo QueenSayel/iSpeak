@@ -1,19 +1,14 @@
 // src/useCollaboration.ts
 
 import { Editor } from 'tldraw'
-import type { TLEventInfo, TLRecord, TLStoreEventInfo, TLShapeId, TLPageId } from 'tldraw'
+import type { TLEventInfo, TLRecord, TLStoreEventInfo } from 'tldraw'
 import { useEffect } from 'react'
 import { supabase } from './supabaseClient'
 
-// --- STEP 1: EXPAND THE AWARENESS PAYLOAD ---
-// We need to broadcast more than just the cursor.
 type Awareness = {
-    user: { name: string; color: string }
+    // Only send the minimal data needed over the network
     cursor: { x: number; y: number }
-    camera: { x: number; y: number; z: number }
-    screenBounds: { x: number, y: number, w: number, h: number }
-    selectedShapeIds: TLShapeId[]
-    currentPageId: TLPageId
+    user: { name: string; color: string }
 }
 
 export function useCollaboration(editor: Editor | undefined, boardId: string | null) {
@@ -59,47 +54,34 @@ export function useCollaboration(editor: Editor | undefined, boardId: string | n
                 if (key === presenceKey) continue
 
                 const presence = presenceState[key][0]
-                // Check for all the new data points before creating the record
-                if (presence?.cursor && presence?.user && presence?.camera && presence.screenBounds) {
+                if (presence?.cursor && presence?.user) {
                     presences.push({
                         id: `instance_presence:${key}`,
                         typeName: 'instance_presence',
                         userId: key,
                         userName: presence.user.name,
-                        lastActivityTimestamp: Date.now(),
-                        color: presence.user.color,
-                        
-                        // --- STEP 3: RECONSTRUCT THE FULL RECORD ---
-                        // Use all the broadcasted data to create a valid presence record.
-                        camera: presence.camera,
-                        screenBounds: presence.screenBounds,
-                        followingUserId: null,
+                        // --- FIX: Construct the full cursor object required by the tldraw schema ---
                         cursor: {
                             x: presence.cursor.x,
                             y: presence.cursor.y,
-                            type: 'default',
-                            rotation: 0,
+                            type: 'default', // Add the missing 'type' property
+                            rotation: 0,     // Add the missing 'rotation' property
                         },
-                        selectedShapeIds: presence.selectedShapeIds,
-                        currentPageId: presence.currentPageId,
+                        color: presence.user.color,
+                        lastActivityTimestamp: Date.now(),
+                        followingUserId: null,
                     } as TLRecord)
                 }
             }
             editor.store.put(presences)
         })
 
-        // --- TRACKING OUR OWN CURSOR, CAMERA, ETC. ---
+        // --- TRACKING OUR OWN CURSOR (Unchanged) ---
         const eventListener = (info: TLEventInfo) => {
-            // We can track on multiple events, but pointer_move is the most frequent.
-            if (info.name === 'pointer_move' || info.name === 'zoom' || info.name === 'pan') {
-                // --- STEP 2: BROADCAST THE FULL AWARENESS STATE ---
+            if (info.name === 'pointer_move') {
                 channel.track({
-                    user: { name: 'Anonymous User', color: '#ff69b4' },
                     cursor: editor.inputs.currentScreenPoint,
-                    camera: editor.camera,
-                    screenBounds: editor.viewportScreenBounds,
-                    selectedShapeIds: editor.selectedShapeIds,
-                    currentPageId: editor.currentPageId,
+                    user: { name: 'Anonymous User', color: '#ff69b4' },
                 })
             }
         }
