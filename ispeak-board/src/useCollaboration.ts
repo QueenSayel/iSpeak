@@ -6,7 +6,7 @@ import type {
   TLStoreEventInfo,
   TLShapeId,
   TLPageId,
-  TLInstancePresenceID,   // ✅ added
+  TLInstancePresenceID,
 } from 'tldraw'
 import { useEffect, useState } from 'react'
 import { supabase } from './supabaseClient'
@@ -20,7 +20,8 @@ function getUserColor(id: string) {
   return `hsl(${h}, 80%, 70%)`
 }
 
-type Awareness = {
+// Export the Awareness type so our App component can use it
+export type Awareness = {
   id: string
   name: string
   color: string
@@ -33,6 +34,8 @@ type Awareness = {
 
 export function useCollaboration(editor: Editor | undefined, boardId: string | null) {
   const [user, setUser] = useState<{ id: string; email: string } | null>(null)
+  // --- NEW: State to hold the list of collaborators for the UI ---
+  const [collaborators, setCollaborators] = useState<Awareness[]>([])
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -69,7 +72,15 @@ export function useCollaboration(editor: Editor | undefined, boardId: string | n
     channel.on('presence', { event: 'sync' }, () => {
       const presenceState = channel.presenceState<Awareness>()
       const presencesToPut: TLRecord[] = []
-      const presencesToRemove: TLInstancePresenceID[] = [] // ✅ changed type
+      const presencesToRemove: TLInstancePresenceID[] = []
+      
+      // --- NEW: Update the collaborators state for the UI ---
+      const newCollaborators: Awareness[] = []
+      for (const key in presenceState) {
+        newCollaborators.push(presenceState[key][0])
+      }
+      setCollaborators(newCollaborators)
+      // --- END NEW ---
 
       const presentIdsInStore = editor.store
         .query.records('instance_presence')
@@ -81,7 +92,7 @@ export function useCollaboration(editor: Editor | undefined, boardId: string | n
       // Remove departed users
       for (const id of presentIdsInStore) {
         if (!incomingIds.has(id)) {
-          presencesToRemove.push(`instance_presence:${id}` as TLInstancePresenceID) // ✅ fixed
+          presencesToRemove.push(`instance_presence:${id}` as TLInstancePresenceID)
         }
       }
       if (presencesToRemove.length) editor.store.remove(presencesToRemove)
@@ -98,7 +109,7 @@ export function useCollaboration(editor: Editor | undefined, boardId: string | n
         const camera = presence.camera || { x: 0, y: 0, z: 1 }
 
         presencesToPut.push({
-          id: `instance_presence:${presence.id}` as TLInstancePresenceID, // ✅ fixed
+          id: `instance_presence:${presence.id}` as TLInstancePresenceID,
           typeName: 'instance_presence',
           userId: presence.id,
           userName: presence.name,
@@ -120,14 +131,13 @@ export function useCollaboration(editor: Editor | undefined, boardId: string | n
       if (presencesToPut.length) editor.store.put(presencesToPut)
     })
 
-    // --- TRACK OUR OWN PRESENCE (throttled ~30Hz for performance) ---
     let lastSent = 0
     const sendPresence = () => {
       const now = Date.now()
       if (now - lastSent < 33) return
       lastSent = now
 
-      const pt = editor.inputs.currentScreenPoint || { x: 0, y: 0 }
+      const pt = editor.inputs.currentPagePoint || { x: 0, y: 0 }
       const cursor = { x: pt.x, y: pt.y, type: 'default', rotation: 0 }
       const cam = editor.getCamera()
       const camera = cam ? { x: cam.x, y: cam.y, z: cam.z } : { x: 0, y: 0, z: 1 }
@@ -159,4 +169,7 @@ export function useCollaboration(editor: Editor | undefined, boardId: string | n
       supabase.removeChannel(channel)
     }
   }, [editor, boardId, user])
+
+  // --- NEW: Return the state to the component ---
+  return { collaborators }
 }
