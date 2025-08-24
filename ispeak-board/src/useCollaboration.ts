@@ -1,95 +1,124 @@
 // src/useCollaboration.ts
 
-import { Editor, TLEventInfo } from 'tldraw'
-import { useEffect } from 'react'
+import { Editor } from 'tldraw'
+import type { TLChange, TLRecord, TLEventInfo } from 'tldraw' // CORRECTED: Use 'import type'
+import { useEffect, useState } from 'react'
 import { supabase } from './supabaseClient'
-import type { RealtimeChannel } from '@supabase/supabase-js'
-import type { TLRecord } from 'tldraw'
+// 'RealtimeChannel' was unused, so it has been removed.
 
-// Data we broadcast via Supabase Presence
+// Define the shape of the data we send for presence
 type Awareness = {
-  cursor?: { x: number; y: number }
-  user?: { name: string; color: string }
+    cursor: { x: number; y: number }
+    user: { name: string; color: string }
+}
+
+// A simple utility to generate a consistent color from a user ID
+function getUserColor(id: string) {
+    let hash = 0;
+    for (let i = 0; i < id.length; i++) {
+        hash = id.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const h = hash % 360;
+    return `hsl(${h}, 80%, 70%)`;
 }
 
 export function useCollaboration(editor: Editor | undefined, boardId: string | null) {
-  useEffect(() => {
-    if (!editor || !boardId) return
+    const [user, setUser] = useState<{ id: string, email: string } | null>(null);
 
-    const clientId = `user-${Math.random().toString(36).slice(2, 11)}`
+    // Fetch the current user's data once when the hook loads
+    useEffect(() => {
+        const fetchUser = async () => {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) {
+                setUser({ id: user.id, email: user.email || 'Anonymous' });
+            }
+        };
+        fetchUser();
+    }, []);
 
-    const channel: RealtimeChannel = supabase.channel(`board:${boardId}`, {
-      config: {
-        broadcast: { self: false },
-        presence: { key: clientId },
-      },
-    })
+    useEffect(() => {
+        if (!editor || !boardId || !user) return;
 
-    // --- 1) Broadcast local document changes ---
-    const stopListening: () => void = editor.store.listen(
-      (entry: any) => {
-        if (entry?.source !== 'user') return
-        channel.send({
-          type: 'broadcast',
-          event: 'tldraw-changes',
-          payload: entry.changes,
+        const channel = supabase.channel(`board:${boardId}`, {
+            config: {
+                broadcast: { self: false },
+                presence: { key: user.id }, // Use the stable user ID as the key
+            },
         })
-      },
-      { source: 'user', scope: 'document' }
-    )
 
-    // --- 2) Apply remote changes ---
-    channel.on('broadcast', { event: 'tldraw-changes' }, ({ payload }) => {
-      editor.store.mergeRemoteChanges(() => {
-        editor.store.applyDiff(payload)
-      })
-    })
+        // --- BROADCASTING LOCAL CHANGES (This part is correct) ---
+        const unlisten = editor.store.listen(
+            (change: TLChange) => {
+                if (change.source !== 'user') return;
+                const diff = {
+                    added: change.added,
+                    updated: change.updated,
+                    removed: change.removed,
+                };
+                if (Object.keys(diff.added).length || Object.keys(diff.updated).length || Object.keys(diff.removed).length) {
+                    channel.send({
+                        type: 'broadcast',
+                        event: 'tldraw-changes',
+                        payload: diff,
+                    });
+                }
+            },
+            { source: 'user', scope: 'document' }
+        )
 
-    // --- 3) Presence: render remote cursors ---
-    channel.on('presence', { event: 'sync' }, () => {
-      const state = channel.presenceState<Awareness>()
-      const presences: TLRecord[] = []
+        // --- RECEIVING AND APPLYING REMOTE CHANGES (This part is correct) ---
+        channel.on('broadcast', { event: 'tldraw-changes' }, ({ payload }) => {
+            console.log('Received remote changes:', payload);
+            if (payload) {
+                editor.store.mergeRemoteChanges(() => {
+                    editor.store.applyDiff(payload);
+                });
+            }
+        });
+        
+        // --- HANDLING PRESENCE (CURSORS) ---
+        channel.on('presence', { event: 'sync' }, () => {
+            const presenceState = channel.presenceState<Awareness>()
+            const presences: TLRecord[] = []
+            
+            for (const key in presenceState) {
+                if (key === user.id) continue;
+                const presence = presenceState[key][0];
+                if (presence?.cursor && presence?.user) {
+                    presences.push({
+                        id: `instance_presence:${key}`, typeName: 'instance_presence',
+                        userId: key, userName: presence.user.name,
+                        cursor: presence.cursor, color: presence.user.color,
+                        lastActivityTimestamp: Date.now(),
+                    } as TLRecord);
+                }
+            }
+            editor.store.put(presences);
+        });
 
-      for (const key in state) {
-        if (key === clientId) continue
-        const p = state[key][0]
-        if (p?.cursor) {
-          presences.push({
-            id: `instance_presence:${key}`,
-            typeName: 'instance_presence',
-            userId: key,
-            userName: p.user?.name ?? 'Guest',
-            color: p.user?.color ?? '#4f46e5',
-            cursor: p.cursor,
-            currentPageId: editor.getCurrentPageId(),
-            lastActivityTimestamp: Date.now(),
-          } as TLRecord)
+        // --- TRACKING OUR OWN CURSOR (CORRECTED) ---
+        // We listen to the generic 'event' and filter for pointer moves.
+        const eventUnsub = editor.on('event', (info: TLEventInfo) => {
+            if (info.name === 'pointer_move') {
+                channel.track({
+                    cursor: info.point,
+                    user: { name: user.email, color: getUserColor(user.id) },
+                });
+            }
+        });
+
+        // --- SUBSCRIBE TO THE CHANNEL ---
+        channel.subscribe(async (status) => {
+            if (status === 'SUBSCRIBED') {
+                console.log(`Subscribed to channel: board:${boardId}`);
+            }
+        });
+
+        // --- CLEANUP ---
+        return () => {
+            unlisten();
+            eventUnsub(); // Unsubscribe from the generic event listener
+            supabase.removeChannel(channel);
         }
-      }
-
-      if (presences.length) editor.store.put(presences)
-    })
-
-    // --- 4) Broadcast our cursor ---
-    const offPointer = editor.on('pointer', (e: TLEventInfo & { point?: { x: number; y: number } }) => {
-      if (!e?.point) return
-      channel.track({
-        cursor: e.point,
-        user: { name: 'Anonymous User', color: '#ff69b4' },
-      } as Awareness)
-    })
-
-    // --- 5) Subscribe / cleanup ---
-    channel.subscribe((status) => {
-      if (status === 'SUBSCRIBED') {
-        console.log(`Subscribed to channel: board:${boardId}`)
-      }
-    })
-
-    return () => {
-      stopListening()
-      offPointer()
-      supabase.removeChannel(channel)
-    }
-  }, [editor, boardId])
+    }, [editor, boardId, user]);
 }
