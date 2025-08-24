@@ -167,6 +167,7 @@ button:active {
     display: flex;
     justify-content: center;
     align-items: center;
+	z-index: 1000;
 }
 .modal-content {
     background: white;
@@ -329,4 +330,38 @@ body,
 .fc-list-day-text {
     font-weight: bold;
     color: var(--dark-color);
+}
+#event-details-modal .form-group {
+    margin-bottom: 1rem;
+}
+
+#event-details-modal label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+    color: var(--text-color);
+}
+
+#event-details-modal input[type="datetime-local"] {
+    width: 100%;
+    padding: 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    font-size: 1rem;
+    font-family: inherit;
+    box-sizing: border-box;
+}
+
+#event-details-modal .button-group {
+    display: flex;
+    gap: 1rem;
+    margin-top: 1.5rem;
+    border-top: 1px solid var(--border-color);
+    padding-top: 1.5rem;
+}
+
+#event-details-modal #close-event-modal-btn {
+    margin-top: 1rem;
+    background: #e2e8f0;
+    width: 100%;
 }
