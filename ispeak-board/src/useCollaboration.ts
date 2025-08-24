@@ -108,7 +108,7 @@ export function useCollaboration(editor: Editor | undefined, boardId: string | n
       if (presencesToPut.length) editor.store.put(presencesToPut)
     })
 
-    // --- TRACK OUR OWN PRESENCE (throttled ~30Hz) ---
+    // --- TRACK OUR OWN PRESENCE (throttled ~30Hz for performance) ---
     let lastSent = 0
     const sendPresence = () => {
       const now = Date.now()
