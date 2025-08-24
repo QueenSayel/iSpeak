@@ -151,7 +151,7 @@ export default function App() {
     const checkUserSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
-        window.location.href = '/board/login.html';
+        window.location.href = '/login';
       } else {
         setIsAuthLoading(false);
       }
