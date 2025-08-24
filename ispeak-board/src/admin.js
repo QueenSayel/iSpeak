@@ -17,10 +17,23 @@ const closeModalBtn = document.getElementById('close-modal-btn');
 const scheduleTabBtn = document.getElementById('schedule-tab-btn');
 const scheduleContent = document.getElementById('schedule-content');
 const calendarEl = document.getElementById('calendar');
+const eventDetailsModal = document.getElementById('event-details-modal');
+const modalEventTitle = document.getElementById('modal-event-title');
+const availableSlotDetails = document.getElementById('available-slot-details');
+const bookedSlotDetails = document.getElementById('booked-slot-details');
+const eventStartTimeInput = document.getElementById('event-start-time');
+const eventEndTimeInput = document.getElementById('event-end-time');
+const saveEventBtn = document.getElementById('save-event-btn');
+const deleteEventBtn = document.getElementById('delete-event-btn');
+const bookedByEmailSpan = document.getElementById('booked-by-email');
+const cancelBookingBtn = document.getElementById('cancel-booking-btn');
+const closeEventModalBtn = document.getElementById('close-event-modal-btn');
+const adminMeetingLink = document.getElementById('admin-meeting-link');
 
 let currentManagingBoardId = null; // Stores the ID of the board being managed in the modal
 let calendar = null; // A variable to hold the calendar instance
 let adminProfile = null; // An in-memory array to hold our availability events
+let currentSelectedEvent = null;
 
 // --- AUTH GUARD (Checks for admin role) ---
 async function checkAdminAuth() {
@@ -37,30 +50,9 @@ async function checkAdminAuth() {
 }
 
 // --- TAB SWITCHING LOGIC ---
-boardsTabBtn.addEventListener('click', () => {
-    boardsContent.classList.add('active');
-    studentsContent.classList.remove('active');
-    scheduleContent.classList.remove('active');
-    boardsTabBtn.classList.add('active');
-    studentsTabBtn.classList.remove('active');
-    scheduleTabBtn.classList.remove('active');
-});
-studentsTabBtn.addEventListener('click', () => {
-    studentsContent.classList.add('active');
-    boardsContent.classList.remove('active');
-    scheduleContent.classList.remove('active');
-    studentsTabBtn.classList.add('active');
-    boardsTabBtn.classList.remove('active');
-    scheduleTabBtn.classList.remove('active');
-});
-scheduleTabBtn.addEventListener('click', () => {
-    scheduleContent.classList.add('active');
-    boardsContent.classList.remove('active');
-    studentsContent.classList.remove('active');
-    scheduleTabBtn.classList.add('active');
-    boardsTabBtn.classList.remove('active');
-    studentsTabBtn.classList.remove('active');
-});
+boardsTabBtn.addEventListener('click', () => { boardsContent.classList.add('active'); studentsContent.classList.remove('active'); scheduleContent.classList.remove('active'); boardsTabBtn.classList.add('active'); studentsTabBtn.classList.remove('active'); scheduleTabBtn.classList.remove('active'); });
+studentsTabBtn.addEventListener('click', () => { studentsContent.classList.add('active'); boardsContent.classList.remove('active'); scheduleContent.classList.remove('active'); studentsTabBtn.classList.add('active'); boardsTabBtn.classList.remove('active'); scheduleTabBtn.classList.remove('active'); });
+scheduleTabBtn.addEventListener('click', () => { scheduleContent.classList.add('active'); boardsContent.classList.remove('active'); studentsContent.classList.remove('active'); scheduleTabBtn.classList.add('active'); boardsTabBtn.classList.remove('active'); studentsTabBtn.classList.remove('active'); });
 
 function initializeCalendar() {
     if (calendar) return;
@@ -81,22 +73,29 @@ function initializeCalendar() {
         selectable: true,
 
         // --- DATA SOURCE: FETCH FROM SUPABASE ---
-        events: async function(fetchInfo) {
-            const { data, error } = await supabase
-                .from('availability')
-                .select('id, start_time, end_time, status, booked_by');
-            
-            if (error) { console.error('Error fetching availability:', error); return []; }
+		events: async function(fetchInfo) {
+			// This query is now more powerful: it gets the email AND the meeting_link
+			const { data, error } = await supabase
+				.from('availability')
+				.select('*, profiles:booked_by(email, meeting_link)'); // Get both fields
+			
+			if (error) { console.error('Error fetching availability:', error); return []; }
 
-            return data.map(slot => ({
-                id: slot.id,
-                start: slot.start_time,
-                end: slot.end_time,
-                title: slot.status === 'available' ? 'Available' : 'Booked',
-                backgroundColor: slot.status === 'available' ? '#28a745' : '#e53e3e',
-                borderColor: slot.status === 'available' ? '#28a745' : '#e53e3e',
-            }));
-        },
+			return data.map(slot => ({
+				id: slot.id,
+				start: slot.start_time,
+				end: slot.end_time,
+				title: slot.status === 'available' ? 'Available' : 'Booked',
+				backgroundColor: slot.status === 'available' ? '#28a745' : '#e53e3e',
+				borderColor: slot.status === 'available' ? '#28a745' : '#e53e3e',
+				editable: slot.status === 'available',
+				// Store all the pre-fetched data in extendedProps
+				extendedProps: {
+					bookerEmail: slot.profiles ? slot.profiles.email : null,
+					meetingLink: slot.profiles ? slot.profiles.meeting_link : null,
+				}
+			}));
+		},
 
         // --- VISUAL CUSTOMIZATION ---
         eventContent: function(arg) {
@@ -127,7 +126,7 @@ function initializeCalendar() {
                 end_time: info.end.toISOString(),
                 status: 'available',
                 admin_id: adminProfile.id
-            }).select().single(); // This gets the new row back, including its real ID
+            }).select().single();
 
             if (error) {
                 console.error('Error creating slot:', error);
@@ -135,46 +134,18 @@ function initializeCalendar() {
                 const event = calendar.getEventById(newSlot.id);
                 if (event) event.remove(); // Rollback
             } else {
-                // --- THE FIX ---
-                // Instead of refetching all events, we find our temporary event...
+                // Update the temporary event with its permanent ID from the database
                 const tempEvent = calendar.getEventById(newSlot.id);
                 if (tempEvent) {
-                    // ...and update its ID to the permanent one from the database.
                     tempEvent.setProp('id', data.id);
                 }
             }
         },
-        eventClick: async function(info) { // Delete availability or cancel booking
-            const event = info.event;
-            const eventId = event.id;
-            const eventTitle = event.title;
-
-            if (eventTitle === 'Available' && confirm("Are you sure you want to delete this available slot?")) {
-                event.remove(); // Optimistically remove from UI
-                const { error } = await supabase.from('availability').delete().eq('id', eventId);
-                if (error) {
-                    console.error('Error deleting slot:', error);
-                    alert('Could not delete the slot. It has been restored.');
-                    calendar.refetchEvents(); // Rollback by refetching
-                }
-            } else if (eventTitle === 'Booked' && confirm("Cancel this student's booking? This will make the slot available again.")) {
-                event.setProp('title', 'Available');
-                event.setProp('backgroundColor', '#28a745');
-                event.setProp('borderColor', '#28a745'); // Optimistically update UI
-                
-                const { error } = await supabase
-                    .from('availability')
-                    .update({ status: 'available', booked_by: null })
-                    .eq('id', eventId);
-
-                if (error) {
-                    console.error('Error cancelling booking:', error);
-                    alert('Could not cancel the booking. It has been restored.');
-                    calendar.refetchEvents(); // Rollback by refetching
-                }
-            }
+        eventClick: function(info) {
+            // This function's only job is to open the new modal.
+            openEventDetailsModal(info.event);
         },
-        eventDrop: async function(info) { // Move an event (already optimistic)
+        eventDrop: async function(info) { // Move an event
             const { error } = await supabase.from('availability').update({
                 start_time: info.event.start.toISOString(),
                 end_time: info.event.end.toISOString()
@@ -185,7 +156,7 @@ function initializeCalendar() {
                 info.revert(); // Rollback
             }
         },
-        eventResize: async function(info) { // Resize an event (already optimistic)
+        eventResize: async function(info) { // Resize an event
             const { error } = await supabase.from('availability').update({
                 end_time: info.event.end.toISOString()
             }).eq('id', info.event.id);
@@ -240,6 +211,102 @@ async function fetchStudents() {
         });
     }
 }
+
+function toLocalISOString(date) {
+    const tzoffset = (new Date()).getTimezoneOffset() * 60000;
+    const localISOTime = (new Date(date - tzoffset)).toISOString().slice(0, 16);
+    return localISOTime;
+}
+
+async function openEventDetailsModal(event) {
+    currentSelectedEvent = event;
+    modalEventTitle.textContent = `Details for ${event.title} Slot`;
+    
+    if (event.title === 'Available') {
+        availableSlotDetails.style.display = 'block';
+        bookedSlotDetails.style.display = 'none';
+        // This is where the typo was fixed: toLocalISOString
+        eventStartTimeInput.value = toLocalISOString(event.start);
+        eventEndTimeInput.value = toLocalISOString(event.end);
+    } else { // It's a "Booked" slot
+        availableSlotDetails.style.display = 'none';
+        bookedSlotDetails.style.display = 'block';
+        
+        // Use the pre-fetched data for an instant modal
+        bookedByEmailSpan.textContent = event.extendedProps.bookerEmail || 'Unknown Student';
+
+        if (event.extendedProps.meetingLink) {
+            adminMeetingLink.href = event.extendedProps.meetingLink;
+            adminMeetingLink.textContent = event.extendedProps.meetingLink;
+        } else {
+            adminMeetingLink.textContent = "No meeting link assigned to this student.";
+            adminMeetingLink.removeAttribute('href');
+        }
+    }
+    
+    eventDetailsModal.style.display = 'flex';
+}
+
+function closeEventDetailsModal() {
+    eventDetailsModal.style.display = 'none';
+    currentSelectedEvent = null;
+}
+
+saveEventBtn.addEventListener('click', async () => {
+    if (!currentSelectedEvent) return;
+    const newStart = new Date(eventStartTimeInput.value);
+    const newEnd = new Date(eventEndTimeInput.value);
+
+    if (newStart >= newEnd) { alert("Error: Start time must be before end time."); return; }
+
+    const allEvents = calendar.getEvents();
+    const otherEvents = allEvents.filter(e => e.id !== currentSelectedEvent.id);
+    const hasOverlap = otherEvents.some(otherEvent => (newStart < otherEvent.end) && (newEnd > otherEvent.start));
+
+    if (hasOverlap) { alert('Error: The new time range overlaps with another existing slot.'); return; }
+
+    const { error } = await supabase.from('availability').update({ start_time: newStart.toISOString(), end_time: newEnd.toISOString() }).eq('id', currentSelectedEvent.id);
+    if (error) { alert('Failed to save changes.'); console.error(error); }
+    else { closeEventDetailsModal(); calendar.refetchEvents(); }
+});
+
+deleteEventBtn.addEventListener('click', async () => {
+    if (!currentSelectedEvent) return;
+    if (confirm("Are you sure you want to permanently delete this available slot?")) {
+        const eventToDelete = calendar.getEventById(currentSelectedEvent.id);
+
+        if (eventToDelete) {
+            // 1. Optimistically remove from UI and close modal
+            eventToDelete.remove();
+            closeEventDetailsModal();
+
+            // 2. Send delete request to the database
+            const { error } = await supabase
+                .from('availability')
+                .delete()
+                .eq('id', eventToDelete.id);
+
+            // 3. Handle failure
+            if (error) {
+                console.error('Error deleting slot:', error);
+                alert('Could not delete the slot from the database. It has been restored.');
+                // Rollback by refetching all events
+                calendar.refetchEvents();
+            }
+        }
+    }
+});
+
+cancelBookingBtn.addEventListener('click', async () => {
+    if (!currentSelectedEvent) return;
+    if (confirm("Are you sure you want to cancel this student's booking? The slot will become available again.")) {
+        const { error } = await supabase.from('availability').update({ status: 'available', booked_by: null }).eq('id', currentSelectedEvent.id);
+        if (error) { alert('Failed to cancel booking.'); console.error(error); }
+        else { closeEventDetailsModal(); calendar.refetchEvents(); }
+    }
+});
+
+closeEventModalBtn.addEventListener('click', closeEventDetailsModal);
 
 // --- MANAGE ACCESS MODAL LOGIC ---
 async function openManageModal(boardId, boardName) {
