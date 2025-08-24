@@ -10,8 +10,9 @@ import 'tldraw/tldraw.css'
 import { useCallback, useEffect, useState } from 'react'
 import { useDebouncedCallback } from 'use-debounce'
 import { supabase } from './supabaseClient'
+import { useCollaboration } from './useCollaboration' // Import our new hook
 
-// --- CHANGE 1: CREATE A NEW COMPONENT FOR ERROR MESSAGES ---
+// --- COMPONENTS (Unchanged) ---
 function MessageScreen({ title, message }: { title: string; message: string }) {
   return (
     <div style={{
@@ -26,7 +27,6 @@ function MessageScreen({ title, message }: { title: string; message: string }) {
   )
 }
 
-
 function LoadingScreen() {
   return (
     <div
@@ -36,25 +36,42 @@ function LoadingScreen() {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: 'rgba(255, 255, 255, 0.8)',
+        backgroundColor: 'white',
       }}
     >
-      <h2>Loading...</h2>
+      <div style={{ textAlign: 'center' }}>
+        <h2 
+          style={{ 
+            color: '#2b2d42',
+            marginBottom: '2rem',
+          }}
+        >
+          Loading...
+        </h2>
+        <img 
+          src="/board/loader.gif" 
+          alt="Loading animation"
+          style={{
+            transform: 'scale(0.5)',
+          }}
+        />
+      </div>
     </div>
   )
 }
+
 
 export default function App() {
   const [editor, setEditor] = useState<Editor>()
   const [snapshot, setSnapshot] = useState<TLStoreSnapshot | null>(null)
   const [isAuthLoading, setIsAuthLoading] = useState(true);
-  
-  // --- CHANGE 2: ADD NEW STATE TO TRACK LOADING ERRORS ---
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const path = window.location.pathname;
   const boardId = path.split('/board/b/')[1] || null;
 
+  // --- 1. INITIAL LOAD (Unchanged) ---
+  // This effect handles authentication and loading the board's initial state.
   useEffect(() => {
     const checkUserSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -76,43 +93,43 @@ export default function App() {
     }
 
     const loadBoard = async () => {
-      setSnapshot(null); // Set to loading state
-      setLoadError(null); // Reset any previous errors
-
+      setSnapshot(null);
+      setLoadError(null);
       try {
-        // --- CHANGE 3: MODIFIED QUERY TO CATCH "NOT FOUND" ---
-        // We remove .single() to prevent it from throwing an error on zero rows.
         const { data, error } = await supabase
           .from('boards')
           .select('content')
           .eq('id', boardId)
-          .maybeSingle() // Use .maybeSingle() which returns null instead of erroring on no rows
+          .maybeSingle()
 
-        if (error) throw error; // If there's a real database error, throw it to the catch block.
+        if (error) throw error;
 
         if (data?.content) {
-          // Success: we found the board and have access
           setSnapshot(data.content)
         } else {
-          // This is the key: if data is null, the board was not found OR RLS blocked it.
           setLoadError("You may not have access to this board, or it may not exist.");
-          setSnapshot({} as TLStoreSnapshot); // Unblock rendering, the error message will show.
+          setSnapshot({} as TLStoreSnapshot);
         }
       } catch (error) {
-        // This will catch network errors or other unexpected database issues.
         console.error('Failed to load board:', error)
         setLoadError("An unexpected error occurred while trying to load the board.");
-        setSnapshot({} as TLStoreSnapshot); // Unblock rendering
+        setSnapshot({} as TLStoreSnapshot);
       }
     }
-
     loadBoard()
   }, [boardId, isAuthLoading])
 
-  // handleMount and debouncedSave remain the same
   const handleMount = useCallback((editor: Editor) => { setEditor(editor) }, [])
+
+  // --- 2. LIVE COLLABORATION (NEW) ---
+  // This single line activates our entire real-time system. It runs in parallel
+  // to the persistence logic below.
+  useCollaboration(editor, boardId);
+
+  // --- 3. PERSISTENT SAVING (UNCHANGED) ---
+  // We keep the debounced save to ensure the final state is always stored in the database.
   const debouncedSave = useDebouncedCallback((editorToSave: Editor) => {
-    if (!boardId || loadError) return; // Also, don't save if there was a load error.
+    if (!boardId || loadError) return;
 
     const currentSnapshot = editorToSave.getSnapshot()
     supabase
@@ -122,41 +139,41 @@ export default function App() {
         if (response.error) {
           console.error('!!! Supabase Error saving board:', response.error)
         } else {
-          console.log(`✅ Board ${boardId} saved successfully!`)
+          console.log(`✅ Board ${boardId} saved successfully! (Persistence)`)
         }
       })
-  }, 1000)
+  }, 2000) // Increased debounce to 2s to reduce frequency of writes
 
   useEffect(() => {
     if (!editor) return
-    const unlisten = editor.store.listen(() => { debouncedSave(editor) }, { scope: 'document' })
+
+    // This listener is for persistence. It listens for ALL changes,
+    // both local and remote, so that any user's inactivity can trigger a save.
+    const unlisten = editor.store.listen(() => {
+        debouncedSave(editor)
+    }, { scope: 'document' })
+
     return () => unlisten()
   }, [editor, debouncedSave])
 
 
-  // --- CHANGE 4: UPDATED RENDER LOGIC ---
-
-  // While checking for a logged-in user
+  // --- RENDERING LOGIC (Unchanged) ---
   if (isAuthLoading) {
     return <div style={{ position: 'fixed', inset: 0 }}><LoadingScreen /></div>;
   }
 
-  // If there is no board ID in the URL
   if (!boardId) {
     return <MessageScreen title="No Board Selected" message="Please create or select a board from the admin or student dashboard." />;
   }
   
-  // NEW: If we detected an error while loading the board
   if (loadError) {
     return <MessageScreen title="Access Denied or Board Not Found" message={loadError} />;
   }
 
-  // If we are still fetching the board's data
   if (snapshot === null) {
     return <div style={{ position: 'fixed', inset: 0 }}><LoadingScreen /></div>
   }
 
-  // Finally, render the board if everything is successful
   return (
     <div style={{ position: 'fixed', inset: 0 }}>
       <Tldraw
