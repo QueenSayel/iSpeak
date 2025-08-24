@@ -1,10 +1,10 @@
 // src/useCollaboration.ts
 
 import { Editor } from 'tldraw'
-import type { TLChange, TLRecord, TLEventInfo } from 'tldraw' // CORRECTED: Use 'import type'
-import { useEffect, useState } from 'react'
+// Import types from their correct sub-packages for tldraw v3
+import type { TLRecord, TLStoreEventInfo } from '@tldraw/store'
+import { useEffect } from 'react'
 import { supabase } from './supabaseClient'
-// 'RealtimeChannel' was unused, so it has been removed.
 
 // Define the shape of the data we send for presence
 type Awareness = {
@@ -12,113 +12,88 @@ type Awareness = {
     user: { name: string; color: string }
 }
 
-// A simple utility to generate a consistent color from a user ID
-function getUserColor(id: string) {
-    let hash = 0;
-    for (let i = 0; i < id.length; i++) {
-        hash = id.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    const h = hash % 360;
-    return `hsl(${h}, 80%, 70%)`;
-}
-
 export function useCollaboration(editor: Editor | undefined, boardId: string | null) {
-    const [user, setUser] = useState<{ id: string, email: string } | null>(null);
-
-    // Fetch the current user's data once when the hook loads
     useEffect(() => {
-        const fetchUser = async () => {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (user) {
-                setUser({ id: user.id, email: user.email || 'Anonymous' });
-            }
-        };
-        fetchUser();
-    }, []);
-
-    useEffect(() => {
-        if (!editor || !boardId || !user) return;
+        if (!editor || !boardId) return
 
         const channel = supabase.channel(`board:${boardId}`, {
             config: {
+                // This prevents the "echo" problem where you receive your own messages
                 broadcast: { self: false },
-                presence: { key: user.id }, // Use the stable user ID as the key
+                presence: { key: `user-${Math.random().toString(36).substr(2, 9)}` },
             },
         })
 
-        // --- BROADCASTING LOCAL CHANGES (This part is correct) ---
-        const unlisten = editor.store.listen(
-            (change: TLChange) => {
-                if (change.source !== 'user') return;
-                const diff = {
-                    added: change.added,
-                    updated: change.updated,
-                    removed: change.removed,
-                };
-                if (Object.keys(diff.added).length || Object.keys(diff.updated).length || Object.keys(diff.removed).length) {
-                    channel.send({
-                        type: 'broadcast',
-                        event: 'tldraw-changes',
-                        payload: diff,
-                    });
-                }
-            },
-            { source: 'user', scope: 'document' }
-        )
+		// --- BROADCASTING LOCAL CHANGES ---
+		const unlisten = editor.store.listen(
+		  // Use the correct event type and access the payload via `event.changes`
+		  (event: TLStoreEventInfo<'change'>) => {
+			if (event.source !== 'user') return
 
-        // --- RECEIVING AND APPLYING REMOTE CHANGES (This part is correct) ---
-        channel.on('broadcast', { event: 'tldraw-changes' }, ({ payload }) => {
-            console.log('Received remote changes:', payload);
-            if (payload) {
-                editor.store.mergeRemoteChanges(() => {
-                    editor.store.applyDiff(payload);
-                });
-            }
-        });
+			channel.send({
+			  type: 'broadcast',
+			  event: 'tldraw-changes',
+			  // The diff is now directly on event.changes
+			  payload: event.changes,
+			})
+		  },
+		  { source: 'user', scope: 'document' }
+		)
+
+		// --- RECEIVING AND APPLYING REMOTE CHANGES ---
+		channel.on('broadcast', { event: 'tldraw-changes' }, ({ payload }) => {
+		  console.log('Received remote changes:', payload)
+
+		  editor.store.mergeRemoteChanges(() => {
+			editor.store.applyDiff(payload)
+		  })
+		})
         
-        // --- HANDLING PRESENCE (CURSORS) ---
+        // --- HANDLING PRESENCE (CURSORS) --- 
         channel.on('presence', { event: 'sync' }, () => {
             const presenceState = channel.presenceState<Awareness>()
             const presences: TLRecord[] = []
             
             for (const key in presenceState) {
-                if (key === user.id) continue;
-                const presence = presenceState[key][0];
+                // Filter out our own presence key to avoid rendering our own cursor
+                if (key === channel.presence.key) continue
+
+                const presence = presenceState[key][0]
                 if (presence?.cursor && presence?.user) {
                     presences.push({
-                        id: `instance_presence:${key}`, typeName: 'instance_presence',
-                        userId: key, userName: presence.user.name,
-                        cursor: presence.cursor, color: presence.user.color,
+                        id: `instance_presence:${key}`,
+                        typeName: 'instance_presence',
+                        userId: key,
+                        userName: presence.user.name,
+                        cursor: presence.cursor,
+                        color: presence.user.color,
                         lastActivityTimestamp: Date.now(),
-                    } as TLRecord);
+                    } as TLRecord)
                 }
             }
-            editor.store.put(presences);
-        });
+            editor.store.put(presences)
+        })
 
-        // --- TRACKING OUR OWN CURSOR (CORRECTED) ---
-        // We listen to the generic 'event' and filter for pointer moves.
-        const eventUnsub = editor.on('event', (info: TLEventInfo) => {
-            if (info.name === 'pointer_move') {
-                channel.track({
-                    cursor: info.point,
-                    user: { name: user.email, color: getUserColor(user.id) },
-                });
-            }
-        });
+        // --- TRACKING OUR OWN CURSOR ---
+        const pointerMoveUnsub = editor.on('pointermove', (event) => {
+            channel.track({
+                cursor: event.point,
+                user: { name: 'Anonymous User', color: '#ff69b4' },
+            })
+        })
 
         // --- SUBSCRIBE TO THE CHANNEL ---
         channel.subscribe(async (status) => {
             if (status === 'SUBSCRIBED') {
-                console.log(`Subscribed to channel: board:${boardId}`);
+                console.log(`Subscribed to channel: board:${boardId}`)
             }
-        });
+        })
 
         // --- CLEANUP ---
         return () => {
-            unlisten();
-            eventUnsub(); // Unsubscribe from the generic event listener
-            supabase.removeChannel(channel);
+            unlisten()
+            pointerMoveUnsub()
+            supabase.removeChannel(channel)
         }
-    }, [editor, boardId, user]);
+    }, [editor, boardId])
 }
