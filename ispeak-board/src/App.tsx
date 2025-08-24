@@ -7,10 +7,11 @@ import {
 import type { TLStoreSnapshot } from 'tldraw'
 
 import 'tldraw/tldraw.css'
+import './App.css' // --- 1. IMPORT THE NEW CSS FILE ---
 import { useCallback, useEffect, useState } from 'react'
 import { useDebouncedCallback } from 'use-debounce'
 import { supabase } from './supabaseClient'
-import { useCollaboration } from './useCollaboration' // Import our new hook
+import { useCollaboration, type Awareness } from './useCollaboration'
 
 // --- COMPONENTS (Unchanged) ---
 function MessageScreen({ title, message }: { title: string; message: string }) {
@@ -40,24 +41,45 @@ function LoadingScreen() {
       }}
     >
       <div style={{ textAlign: 'center' }}>
-        <h2 
-          style={{ 
-            color: '#2b2d42',
-            marginBottom: '2rem',
-          }}
-        >
-          Loading...
-        </h2>
-        <img 
-          src="/board/loader.gif" 
-          alt="Loading animation"
-          style={{
-            transform: 'scale(0.5)',
-          }}
-        />
+        <h2 style={{ color: '#2b2d42', marginBottom: '2rem' }}>Loading...</h2>
+        <img src="/board/loader.gif" alt="Loading animation" style={{ transform: 'scale(0.5)' }} />
       </div>
     </div>
   )
+}
+
+
+// --- 2. LiveUsers COMPONENT IS NOW CLEANED UP TO USE CSS CLASSES ---
+function LiveUsers({ users }: { users: Awareness[] }) {
+  const [isHovered, setIsHovered] = useState(false);
+
+  if (users.length === 0) return null;
+
+  return (
+    <div
+      className="live-users-container"
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      <div className="live-users-bar">
+        <i className="fa-solid fa-users"></i>
+        <span>Live Users ({users.length})</span>
+      </div>
+
+      {isHovered && (
+        <div className="live-users-dropdown">
+          {users.map((user) => (
+            <div key={user.id} className="user-entry">
+              <div className="user-avatar" style={{ backgroundColor: user.color }}>
+                {user.name.substring(0, 2).toUpperCase()}
+              </div>
+              <span className="user-name">{user.name}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 
@@ -70,8 +92,6 @@ export default function App() {
   const path = window.location.pathname;
   const boardId = path.split('/board/b/')[1] || null;
 
-  // --- 1. INITIAL LOAD (Unchanged) ---
-  // This effect handles authentication and loading the board's initial state.
   useEffect(() => {
     const checkUserSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -91,19 +111,12 @@ export default function App() {
       }
       return;
     }
-
     const loadBoard = async () => {
       setSnapshot(null);
       setLoadError(null);
       try {
-        const { data, error } = await supabase
-          .from('boards')
-          .select('content')
-          .eq('id', boardId)
-          .maybeSingle()
-
+        const { data, error } = await supabase.from('boards').select('content').eq('id', boardId).maybeSingle()
         if (error) throw error;
-
         if (data?.content) {
           setSnapshot(data.content)
         } else {
@@ -121,20 +134,12 @@ export default function App() {
 
   const handleMount = useCallback((editor: Editor) => { setEditor(editor) }, [])
 
-  // --- 2. LIVE COLLABORATION (NEW) ---
-  // This single line activates our entire real-time system. It runs in parallel
-  // to the persistence logic below.
-  useCollaboration(editor, boardId);
+  const { collaborators } = useCollaboration(editor, boardId);
 
-  // --- 3. PERSISTENT SAVING (UNCHANGED) ---
-  // We keep the debounced save to ensure the final state is always stored in the database.
   const debouncedSave = useDebouncedCallback((editorToSave: Editor) => {
     if (!boardId || loadError) return;
-
     const currentSnapshot = editorToSave.getSnapshot()
-    supabase
-      .from('boards')
-      .upsert({ id: boardId, content: currentSnapshot })
+    supabase.from('boards').upsert({ id: boardId, content: currentSnapshot })
       .then((response) => {
         if (response.error) {
           console.error('!!! Supabase Error saving board:', response.error)
@@ -142,40 +147,32 @@ export default function App() {
           console.log(`✅ Board ${boardId} saved successfully! (Persistence)`)
         }
       })
-  }, 2000) // Increased debounce to 2s to reduce frequency of writes
+  }, 2000)
 
   useEffect(() => {
     if (!editor) return
-
-    // This listener is for persistence. It listens for ALL changes,
-    // both local and remote, so that any user's inactivity can trigger a save.
     const unlisten = editor.store.listen(() => {
         debouncedSave(editor)
     }, { scope: 'document' })
-
     return () => unlisten()
   }, [editor, debouncedSave])
 
-
-  // --- RENDERING LOGIC (Unchanged) ---
   if (isAuthLoading) {
     return <div style={{ position: 'fixed', inset: 0 }}><LoadingScreen /></div>;
   }
-
   if (!boardId) {
-    return <MessageScreen title="No Board Selected" message="Please create or select a board from the admin or student dashboard." />;
+    return <MessageScreen title="No board selected" message="Please create or select a board from the admin or student dashboard." />;
   }
-  
   if (loadError) {
-    return <MessageScreen title="Access Denied or Board Not Found" message={loadError} />;
+    return <MessageScreen title="Access denied or board not found" message={loadError} />;
   }
-
   if (snapshot === null) {
     return <div style={{ position: 'fixed', inset: 0 }}><LoadingScreen /></div>
   }
 
   return (
     <div style={{ position: 'fixed', inset: 0 }}>
+      <LiveUsers users={collaborators} />
       <Tldraw
         snapshot={snapshot}
         onMount={handleMount}
