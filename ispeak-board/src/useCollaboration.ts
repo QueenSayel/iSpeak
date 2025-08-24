@@ -1,98 +1,96 @@
 // src/useCollaboration.ts
 
 import { Editor } from 'tldraw'
-import type { TLChange, TLRecord } from 'tldraw'
 import { useEffect } from 'react'
 import { supabase } from './supabaseClient'
-import { RealtimeChannel } from '@supabase/supabase-js'
+import type { RealtimeChannel } from '@supabase/supabase-js' // type-only import
+import type { TLRecord } from 'tldraw'
 
-// Define the shape of the data we send for presence
+// Data we broadcast via Supabase Presence
 type Awareness = {
-    cursor: { x: number; y: number }
-    user: { name: string; color: string }
+  cursor?: { x: number; y: number }
+  user?: { name: string; color: string }
 }
 
 export function useCollaboration(editor: Editor | undefined, boardId: string | null) {
-    useEffect(() => {
-        if (!editor || !boardId) return
+  useEffect(() => {
+    if (!editor || !boardId) return
 
-        const channel = supabase.channel(`board:${boardId}`, {
-            config: {
-                // This prevents the "echo" problem where you receive your own messages
-                broadcast: { self: false },
-                presence: { key: `user-${Math.random().toString(36).substr(2, 9)}` },
-            },
+    // A stable presence key for this client (per tab/session)
+    const clientId = `user-${Math.random().toString(36).slice(2, 11)}`
+
+    const channel: RealtimeChannel = supabase.channel(`board:${boardId}`, {
+      config: {
+        broadcast: { self: false },
+        presence: { key: clientId },
+      },
+    })
+
+    // --- 1) Broadcast local document changes ---
+    const stopListening: () => void = editor.store.listen(
+      (entry: any) => {
+        if (entry?.source !== 'user') return
+        channel.send({
+          type: 'broadcast',
+          event: 'tldraw-changes',
+          payload: entry.changes, // send only the diff
         })
+      },
+      { source: 'user', scope: 'document' }
+    )
 
-		// --- BROADCASTING LOCAL CHANGES ---
-		const unlisten = editor.store.listen(
-		  (changes: TLChange) => {
-			if (changes.source !== 'user') return
+    // --- 2) Apply remote changes ---
+    channel.on('broadcast', { event: 'tldraw-changes' }, ({ payload }) => {
+      editor.store.mergeRemoteChanges(() => {
+        editor.store.applyDiff(payload) // payload is the diff
+      })
+    })
 
-			channel.send({
-			  type: 'broadcast',
-			  event: 'tldraw-changes',
-			  // send only the "changes.changes" diff
-			  payload: changes.changes,
-			})
-		  },
-		  { source: 'user', scope: 'document' }
-		)
+    // --- 3) Presence: render remote cursors ---
+    channel.on('presence', { event: 'sync' }, () => {
+      const state = channel.presenceState<Awareness>()
+      const presences: TLRecord[] = []
 
-		// --- RECEIVING AND APPLYING REMOTE CHANGES ---
-		channel.on('broadcast', { event: 'tldraw-changes' }, ({ payload }) => {
-		  console.log('Received remote changes:', payload)
-
-		  editor.store.mergeRemoteChanges(() => {
-			editor.store.applyDiff(payload) // payload is already the diff now
-		  })
-		})
-        
-        // --- HANDLING PRESENCE (CURSORS) --- 
-        channel.on('presence', { event: 'sync' }, () => {
-            const presenceState = channel.presenceState<Awareness>()
-            const presences: TLRecord[] = []
-            
-            for (const key in presenceState) {
-                // Filter out our own presence key to avoid rendering our own cursor
-                if (key === channel.presence.key) continue
-
-                const presence = presenceState[key][0]
-                if (presence?.cursor && presence?.user) {
-                    presences.push({
-                        id: `instance_presence:${key}`,
-                        typeName: 'instance_presence',
-                        userId: key,
-                        userName: presence.user.name,
-                        cursor: presence.cursor,
-                        color: presence.user.color,
-                        lastActivityTimestamp: Date.now(),
-                    } as TLRecord)
-                }
-            }
-            editor.store.put(presences)
-        })
-
-        // --- TRACKING OUR OWN CURSOR ---
-        const pointerMoveUnsub = editor.on('pointermove', (event) => {
-            channel.track({
-                cursor: event.point,
-                user: { name: 'Anonymous User', color: '#ff69b4' },
-            })
-        })
-
-        // --- SUBSCRIBE TO THE CHANNEL ---
-        channel.subscribe(async (status) => {
-            if (status === 'SUBSCRIBED') {
-                console.log(`Subscribed to channel: board:${boardId}`)
-            }
-        })
-
-        // --- CLEANUP ---
-        return () => {
-            unlisten()
-            pointerMoveUnsub()
-            supabase.removeChannel(channel)
+      for (const key in state) {
+        if (key === clientId) continue // skip self
+        const p = state[key][0]
+        if (p?.cursor) {
+          presences.push({
+            id: `instance_presence:${key}`,
+            typeName: 'instance_presence',
+            userId: key,
+            userName: p.user?.name ?? 'Guest',
+            color: p.user?.color ?? '#4f46e5',
+            cursor: p.cursor,
+            currentPageId: editor.getCurrentPageId(), // <- REQUIRED for cursor to show
+            lastActivityTimestamp: Date.now(),
+          } as TLRecord)
         }
-    }, [editor, boardId])
+      }
+
+      if (presences.length) editor.store.put(presences)
+    })
+
+    // --- 4) Broadcast our own cursor on pointer moves ---
+    const offPointer = editor.on('pointer_move', (e) => {
+      if (!e) return
+      channel.track({
+        cursor: e.point,
+        user: { name: 'Anonymous User', color: '#ff69b4' },
+      } as Awareness)
+    })
+
+    // --- 5) Subscribe / cleanup ---
+    channel.subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        console.log(`Subscribed to channel: board:${boardId}`)
+      }
+    })
+
+    return () => {
+      stopListening()
+      offPointer()
+      supabase.removeChannel(channel)
+    }
+  }, [editor, boardId])
 }
