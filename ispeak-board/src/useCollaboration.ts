@@ -1,7 +1,7 @@
 // src/useCollaboration.ts
 
 import { Editor } from 'tldraw'
-import type { TLEventInfo, TLRecord, TLStoreEventInfo, TLShapeId, TLPageId } from 'tldraw'
+import type { TLRecord, TLStoreEventInfo, TLShapeId, TLPageId } from 'tldraw'
 import { useEffect, useState } from 'react'
 import { supabase } from './supabaseClient'
 
