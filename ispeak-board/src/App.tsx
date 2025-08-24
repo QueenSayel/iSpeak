@@ -48,8 +48,63 @@ function LoadingScreen() {
   )
 }
 
+function BoardSwitcher({ currentBoardId }: { currentBoardId: string | null }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [boards, setBoards] = useState<{ id: string, name: string }[]>([]);
 
-// --- 2. LiveUsers COMPONENT IS NOW CLEANED UP TO USE CSS CLASSES ---
+  useEffect(() => {
+    const fetchAccessibleBoards = async () => {
+      const { data, error } = await supabase
+        .from('boards')
+        .select('id, name')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching board list:', error);
+      } else {
+        setBoards(data || []);
+      }
+    };
+    fetchAccessibleBoards();
+  }, []);
+
+  return (
+    // We add the 'expanded' class based on our state
+    // and the mouse leave event to the container itself
+    <div 
+      className={`board-switcher ${isExpanded ? 'expanded' : ''}`}
+      onMouseLeave={() => setIsExpanded(false)}
+    >
+      {/* The mouse enter event is ONLY on the visible tab */}
+	<div 
+	  className="switcher-tab"
+	  onMouseEnter={() => setIsExpanded(true)}
+	>
+	  <i className={`fa-solid ${isExpanded ? 'fa-chevron-left' : 'fa-chevron-right'}`}></i>
+	</div>
+      <div className="switcher-panel">
+        <h3>Your Boards</h3>
+        <ul>
+          {boards.length > 0 ? (
+            boards.map(board => (
+              <li key={board.id}>
+                <a 
+                  href={`/board/b/${board.id}`}
+                  className={board.id === currentBoardId ? 'active' : ''}
+                >
+                  {board.name}
+                </a>
+              </li>
+            ))
+          ) : (
+            <li>No boards accessible.</li>
+          )}
+        </ul>
+      </div>
+    </div>
+  );
+}
+
 function LiveUsers({ users }: { users: Awareness[] }) {
   const [isHovered, setIsHovered] = useState(false);
 
@@ -172,6 +227,7 @@ export default function App() {
 
   return (
     <div style={{ position: 'fixed', inset: 0 }}>
+	  <BoardSwitcher currentBoardId={boardId} />
       <LiveUsers users={collaborators} />
       <Tldraw
         snapshot={snapshot}
