@@ -1,7 +1,13 @@
 // src/useCollaboration.ts
 
 import { Editor } from 'tldraw'
-import type { TLRecord, TLStoreEventInfo, TLShapeId, TLPageId } from 'tldraw'
+import type {
+  TLRecord,
+  TLStoreEventInfo,
+  TLShapeId,
+  TLPageId,
+  TLInstancePresenceID,   // ✅ added
+} from 'tldraw'
 import { useEffect, useState } from 'react'
 import { supabase } from './supabaseClient'
 
@@ -63,19 +69,19 @@ export function useCollaboration(editor: Editor | undefined, boardId: string | n
     channel.on('presence', { event: 'sync' }, () => {
       const presenceState = channel.presenceState<Awareness>()
       const presencesToPut: TLRecord[] = []
-      const presencesToRemove: TLRecord['id'][] = []
+      const presencesToRemove: TLInstancePresenceID[] = [] // ✅ changed type
 
       const presentIdsInStore = editor.store
         .query.records('instance_presence')
         .get()
-        .map(p => p.userId as TLShapeId) // ✅ cast to branded type
+        .map(p => p.userId as TLShapeId)
 
       const incomingIds = new Set(Object.keys(presenceState))
 
       // Remove departed users
       for (const id of presentIdsInStore) {
         if (!incomingIds.has(id)) {
-          presencesToRemove.push(`instance_presence:${id}` as TLRecord['id']) // ✅ cast to branded type
+          presencesToRemove.push(`instance_presence:${id}` as TLInstancePresenceID) // ✅ fixed
         }
       }
       if (presencesToRemove.length) editor.store.remove(presencesToRemove)
@@ -92,7 +98,7 @@ export function useCollaboration(editor: Editor | undefined, boardId: string | n
         const camera = presence.camera || { x: 0, y: 0, z: 1 }
 
         presencesToPut.push({
-          id: `instance_presence:${presence.id}` as TLRecord['id'],
+          id: `instance_presence:${presence.id}` as TLInstancePresenceID, // ✅ fixed
           typeName: 'instance_presence',
           userId: presence.id,
           userName: presence.name,
