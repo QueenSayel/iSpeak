@@ -1,3 +1,5 @@
+// src/admin.js
+
 import { supabase } from './supabaseClient';
 
 // --- ELEMENT REFERENCES (ALL) ---
@@ -29,21 +31,28 @@ const bookedByEmailSpan = document.getElementById('booked-by-email');
 const cancelBookingBtn = document.getElementById('cancel-booking-btn');
 const closeEventModalBtn = document.getElementById('close-event-modal-btn');
 const adminMeetingLink = document.getElementById('admin-meeting-link');
+const studentNotesModal = document.getElementById('student-notes-modal');
+const modalStudentName = document.getElementById('modal-student-name');
+const studentNotesTextarea = document.getElementById('student-notes-textarea');
+const saveNotesBtn = document.getElementById('save-notes-btn');
+const closeNotesModalBtn = document.getElementById('close-notes-modal-btn');
 
 let currentManagingBoardId = null; // Stores the ID of the board being managed in the modal
 let calendar = null; // A variable to hold the calendar instance
 let adminProfile = null; // An in-memory array to hold our availability events
 let currentSelectedEvent = null;
+let currentNotesStudentId = null;
+let studentNotesCache = new Map();
 
 // --- AUTH GUARD (Checks for admin role) ---
 async function checkAdminAuth() {
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-    if (sessionError || !session) { window.location.href = '/login'; return; }
+    if (sessionError || !session) { window.location.href = '/board/login.html'; return; }
     const { data: profile, error: profileError } = await supabase.from('profiles').select('id, role').eq('id', session.user.id).single();
     if (profileError || !profile || profile.role !== 'admin') {
         alert('Access Denied. You do not have administrator privileges.');
         await supabase.auth.signOut();
-        window.location.href = '/login';
+        window.location.href = '/board/login.html';
     } else {
         adminProfile = profile; // Store the admin's profile for later
     }
@@ -81,32 +90,52 @@ function initializeCalendar() {
 			
 			if (error) { console.error('Error fetching availability:', error); return []; }
 
-			return data.map(slot => ({
-				id: slot.id,
-				start: slot.start_time,
-				end: slot.end_time,
-				title: slot.status === 'available' ? 'Available' : 'Booked',
-				backgroundColor: slot.status === 'available' ? '#28a745' : '#e53e3e',
-				borderColor: slot.status === 'available' ? '#28a745' : '#e53e3e',
-				editable: slot.status === 'available',
-				// Store all the pre-fetched data in extendedProps
-				extendedProps: {
-					bookerEmail: slot.profiles ? slot.profiles.email : null,
-					meetingLink: slot.profiles ? slot.profiles.meeting_link : null,
-				}
-			}));
+			return data.map(slot => {
+				const isPast = new Date(slot.end_time) < new Date(); // past slot?
+
+				// Only modify available slots that are past
+				let title = slot.status === 'available' ? (isPast ? 'Expired' : 'Available') : 'Booked';
+
+				return {
+					id: slot.id,
+					start: slot.start_time,
+					end: slot.end_time,
+					title,
+					backgroundColor: slot.status === 'available'
+						? (isPast ? '#6c757d' : '#28a745') // grey for expired available
+						: '#e53e3e', // booked slots stay red
+					borderColor: slot.status === 'available'
+						? (isPast ? '#6c757d' : '#28a745')
+						: '#e53e3e',
+					editable: !isPast && slot.status === 'available', // past = not editable
+					extendedProps: {
+						bookerEmail: slot.profiles ? slot.profiles.email : null,
+						meetingLink: slot.profiles ? slot.profiles.meeting_link : null,
+						isPast
+					}
+				};
+			});
 		},
 
         // --- VISUAL CUSTOMIZATION ---
-        eventContent: function(arg) {
-            let iconEl = document.createElement('i');
-            iconEl.className = arg.event.title === 'Available' ? 'fa-solid fa-circle-check' : 'fa-solid fa-user-check';
-            iconEl.style.marginRight = '8px';
-            let titleEl = document.createElement('span');
-            titleEl.textContent = arg.event.title;
-            let arrayOfNodes = [iconEl, titleEl];
-            return { domNodes: arrayOfNodes };
-        },
+		eventContent: function(arg) {
+			let iconEl = document.createElement('i');
+			
+			// Differentiate icons for all three states
+			if (arg.event.title === 'Available') {
+				iconEl.className = 'fa-solid fa-circle-check';
+			} else if (arg.event.title === 'Expired') {
+				iconEl.className = 'fa-solid fa-ban'; // New icon for expired/unavailable
+			} else { // Catches 'Booked'
+				iconEl.className = 'fa-solid fa-user-check';
+			}
+			
+			iconEl.style.marginRight = '8px';
+			let titleEl = document.createElement('span');
+			titleEl.textContent = arg.event.title;
+			let arrayOfNodes = [iconEl, titleEl];
+			return { domNodes: arrayOfNodes };
+		},
 
         // --- OPTIMISTIC UI INTERACTIVITY (WITH BUG FIX) ---
         select: async function(info) { // Create new availability
@@ -195,21 +224,77 @@ async function fetchBoards() {
 }
 
 async function fetchStudents() {
-    const { data: profiles, error } = await supabase.from('profiles').select('email, role, created_at').order('created_at', { ascending: false });
-    if (error) { console.error('Error fetching students:', error); studentList.innerHTML = '<li>Could not load students.</li>'; return; }
-    studentList.innerHTML = '';
-    if (profiles.length === 0) { studentList.innerHTML = '<li>No students have registered yet.</li>'; } else {
-        profiles.forEach(profile => {
-            const li = document.createElement('li');
-            li.innerHTML = `
-                <div>
-                    <strong>${profile.email}</strong>
-                    <small style="display: block; color: #888;">Role: ${profile.role} | Joined: ${new Date(profile.created_at).toLocaleDateString()}</small>
-                </div>
-            `;
-            studentList.appendChild(li);
+    studentList.innerHTML = '<li>Loading students...</li>'; // Show initial loading state
+
+    // First, get all student profiles
+    const { data: profiles, error: profilesError } = await supabase
+        .from('profiles')
+        .select('id, email, role, created_at')
+        .order('created_at', { ascending: false });
+
+    if (profilesError) {
+        console.error('Error fetching students:', profilesError);
+        studentList.innerHTML = '<li>Could not load students.</li>';
+        return;
+    }
+
+    if (profiles.length === 0) {
+        studentList.innerHTML = '<li>No students have registered yet.</li>';
+        return;
+    }
+
+    // If students exist, fetch all their notes in a single query
+    const studentIds = profiles.map(p => p.id);
+    const { data: notes, error: notesError } = await supabase
+        .from('student_notes')
+        .select('user_id, note_content')
+        .in('user_id', studentIds);
+
+    if (notesError) {
+        console.error('Error fetching notes:', notesError);
+        // Continue execution, but notes might be missing from cache
+    } else {
+        // Clear and populate the cache
+        studentNotesCache.clear();
+        notes.forEach(note => {
+            studentNotesCache.set(note.user_id, note.note_content);
         });
     }
+
+    // Finally, render the student list to the DOM
+    studentList.innerHTML = '';
+    profiles.forEach(profile => {
+        const li = document.createElement('li');
+        li.className = 'student-item';
+        li.dataset.studentId = profile.id;
+        li.dataset.studentEmail = profile.email;
+        li.innerHTML = `
+            <div>
+                <strong>${profile.email}</strong>
+                <small style="display: block; color: #888;">Role: ${profile.role} | Joined: ${new Date(profile.created_at).toLocaleDateString()}</small>
+            </div>
+            <div><i class="fa-solid fa-chevron-right"></i></div>
+        `;
+        studentList.appendChild(li);
+    });
+}
+
+function openStudentNotesModal(studentId, studentEmail) {
+    currentNotesStudentId = studentId;
+    modalStudentName.innerHTML = `<i class="fa-solid fa-note-sticky"></i> Notes for ${studentEmail}`;
+    
+    // Instantly get the note from the cache; default to empty string if not found
+    const noteContent = studentNotesCache.get(studentId) || '';
+    studentNotesTextarea.value = noteContent;
+    
+    studentNotesModal.style.display = 'flex';
+    studentNotesTextarea.focus(); // Set focus to the text area for better UX
+}
+
+function closeStudentNotesModal() {
+    studentNotesModal.style.display = 'none';
+    currentNotesStudentId = null; // Clear the stored ID
+    studentNotesTextarea.value = ''; // Clear the textarea
 }
 
 function toLocalISOString(date) {
@@ -220,19 +305,43 @@ function toLocalISOString(date) {
 
 async function openEventDetailsModal(event) {
     currentSelectedEvent = event;
-    modalEventTitle.textContent = `Details for ${event.title} Slot`;
-    
-    if (event.title === 'Available') {
+    const isPast = event.extendedProps.isPast;
+    const isAvailable = event.title === 'Available' || event.title === 'Expired';
+
+    // Get the parent '.form-group' divs for the time inputs
+    const startTimeGroup = document.getElementById('event-start-time').parentElement;
+    const endTimeGroup = document.getElementById('event-end-time').parentElement;
+
+    modalEventTitle.textContent = `Details for ${event.title} Slot${isPast ? ' (Past)' : ''}`;
+
+    if (isAvailable) {
+        // This block handles both 'Available' and 'Expired' slots
         availableSlotDetails.style.display = 'block';
         bookedSlotDetails.style.display = 'none';
-        // This is where the typo was fixed: toLocalISOString
+
         eventStartTimeInput.value = toLocalISOString(event.start);
         eventEndTimeInput.value = toLocalISOString(event.end);
-    } else { // It's a "Booked" slot
+
+        // --- MODIFICATION START ---
+        if (isPast) {
+            // For EXPIRED slots: Hide time controls and the save button.
+            startTimeGroup.style.display = 'none';
+            endTimeGroup.style.display = 'none';
+            saveEventBtn.style.display = 'none';
+            deleteEventBtn.style.display = 'inline-block';
+        } else {
+            // For future AVAILABLE slots: Show time controls and the save button.
+            startTimeGroup.style.display = 'block';
+            endTimeGroup.style.display = 'block';
+            saveEventBtn.style.display = 'inline-block';
+            deleteEventBtn.style.display = 'inline-block';
+        }
+        // --- MODIFICATION END ---
+
+    } else { 
+        // This block handles 'Booked' slots
         availableSlotDetails.style.display = 'none';
         bookedSlotDetails.style.display = 'block';
-        
-        // Use the pre-fetched data for an instant modal
         bookedByEmailSpan.textContent = event.extendedProps.bookerEmail || 'Unknown Student';
 
         if (event.extendedProps.meetingLink) {
@@ -242,8 +351,12 @@ async function openEventDetailsModal(event) {
             adminMeetingLink.textContent = "No meeting link assigned to this student.";
             adminMeetingLink.removeAttribute('href');
         }
+
+        cancelBookingBtn.style.display = isPast ? 'none' : 'inline-block';
+        saveEventBtn.style.display = 'none';
+        deleteEventBtn.style.display = 'inline-block';
     }
-    
+
     eventDetailsModal.style.display = 'flex';
 }
 
@@ -251,6 +364,60 @@ function closeEventDetailsModal() {
     eventDetailsModal.style.display = 'none';
     currentSelectedEvent = null;
 }
+
+studentList.addEventListener('click', (e) => {
+    const studentItem = e.target.closest('.student-item');
+    if (studentItem) {
+        const studentId = studentItem.dataset.studentId;
+        const studentEmail = studentItem.dataset.studentEmail;
+        openStudentNotesModal(studentId, studentEmail);
+    }
+});
+
+saveNotesBtn.addEventListener('click', async () => {
+    if (!currentNotesStudentId) return;
+
+    const originalButtonText = saveNotesBtn.innerHTML;
+    const newNoteContent = studentNotesTextarea.value;
+    const studentIdForSave = currentNotesStudentId;
+    const originalNoteContent = studentNotesCache.get(studentIdForSave) || '';
+
+    // 1. Optimistic UI Update
+    studentNotesCache.set(studentIdForSave, newNoteContent);
+    saveNotesBtn.innerHTML = '<i class="fa-solid fa-check"></i> Saved!';
+    setTimeout(() => { saveNotesBtn.innerHTML = originalButtonText; }, 2000);
+
+    // 2. Send the update to the database.
+    // --- FIX IS HERE ---
+    // We now tell Supabase to check for conflicts on the 'user_id' column.
+    const { error } = await supabase.from('student_notes').upsert(
+        {
+            user_id: studentIdForSave,
+            note_content: newNoteContent,
+            last_updated_by: adminProfile.id
+        },
+        {
+            onConflict: 'user_id', // This tells upsert which column to check
+        }
+    );
+    // --- END OF FIX ---
+
+    // 3. Rollback on failure.
+    if (error) {
+        console.error('Error saving notes:', error);
+        alert('Failed to save notes to the server. Your changes have been reverted.');
+
+        studentNotesCache.set(studentIdForSave, originalNoteContent);
+
+        if (studentNotesModal.style.display === 'flex' && currentNotesStudentId === studentIdForSave) {
+             studentNotesTextarea.value = originalNoteContent;
+        }
+        
+        saveNotesBtn.innerHTML = 'Save Failed';
+    }
+});
+
+closeNotesModalBtn.addEventListener('click', closeStudentNotesModal);
 
 saveEventBtn.addEventListener('click', async () => {
     if (!currentSelectedEvent) return;
@@ -280,6 +447,7 @@ saveEventBtn.addEventListener('click', async () => {
         closeEventDetailsModal();
     }
 });
+
 
 deleteEventBtn.addEventListener('click', async () => {
     if (!currentSelectedEvent) return;
@@ -319,7 +487,6 @@ cancelBookingBtn.addEventListener('click', async () => {
 
 closeEventModalBtn.addEventListener('click', closeEventDetailsModal);
 
-// --- MANAGE ACCESS MODAL LOGIC ---
 async function openManageModal(boardId, boardName) {
     currentManagingBoardId = boardId;
     modalBoardName.textContent = `Manage Access for "${boardName}"`;
@@ -406,7 +573,7 @@ closeModalBtn.addEventListener('click', () => {
 
 logoutBtn.addEventListener('click', async () => {
     await supabase.auth.signOut();
-    window.location.href = '/login';
+    window.location.href = '/board/login.html';
 });
 
 // --- INITIALIZE THE PAGE ---
@@ -417,5 +584,3 @@ async function init() {
 	initializeCalendar();
 }
 init();
-
-
