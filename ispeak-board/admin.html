@@ -107,6 +107,18 @@
             <button id="close-event-modal-btn">Close</button>
         </div>
     </div>
+	
+    <div id="student-notes-modal" class="modal-overlay" style="display:none;">
+        <div class="modal-content">
+            <h2 id="modal-student-name"><i class="fa-solid fa-note-sticky"></i> Notes for...</h2>
+            <p>Your notes are private and only visible to other administrators.</p>
+            <textarea id="student-notes-textarea" placeholder="Enter lesson notes, student progress, or other reminders here..."></textarea>
+            <div class="button-group">
+                <button id="save-notes-btn" class="action-btn add-btn"><i class="fa-solid fa-floppy-disk"></i> Save Notes</button>
+            </div>
+            <button id="close-notes-modal-btn" style="width: 100%; margin-top: 1rem; background: #e2e8f0;">Close</button>
+        </div>
+    </div>
 
     <script type="module" src="/src/admin.js"></script>
 </body>
