@@ -365,3 +365,23 @@ body,
     background: #e2e8f0;
     width: 100%;
 }
+
+#students-content .board-list li {
+    cursor: pointer;
+}
+
+#students-content .board-list li:hover {
+    background-color: var(--light-gray-color);
+}
+
+#student-notes-textarea {
+    width: 100%;
+    min-height: 250px;
+    margin-top: 1rem;
+    font-family: inherit;
+    font-size: 1rem;
+    padding: 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    resize: vertical;
+}
