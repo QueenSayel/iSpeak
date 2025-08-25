@@ -265,9 +265,20 @@ saveEventBtn.addEventListener('click', async () => {
 
     if (hasOverlap) { alert('Error: The new time range overlaps with another existing slot.'); return; }
 
-    const { error } = await supabase.from('availability').update({ start_time: newStart.toISOString(), end_time: newEnd.toISOString() }).eq('id', currentSelectedEvent.id);
-    if (error) { alert('Failed to save changes.'); console.error(error); }
-    else { closeEventDetailsModal(); calendar.refetchEvents(); }
+    const { error } = await supabase
+        .from('availability')
+        .update({ start_time: newStart.toISOString(), end_time: newEnd.toISOString() })
+        .eq('id', currentSelectedEvent.id);
+
+    if (error) {
+        alert('Failed to save changes.');
+        console.error(error);
+    } else {
+        currentSelectedEvent.setStart(newStart);
+        currentSelectedEvent.setEnd(newEnd);
+
+        closeEventDetailsModal();
+    }
 });
 
 deleteEventBtn.addEventListener('click', async () => {
@@ -406,4 +417,5 @@ async function init() {
 	initializeCalendar();
 }
 init();
+
 
