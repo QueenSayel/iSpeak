@@ -38,12 +38,59 @@ function LoadingScreen() {
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: 'white',
+        padding: '1rem',
       }}
     >
-      <div style={{ textAlign: 'center' }}>
-        <h2 style={{ color: '#2b2d42', marginBottom: '2rem' }}>Loading...</h2>
-        <img src="/board/loader.gif" alt="Loading animation" style={{ transform: 'scale(0.5)' }} />
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          textAlign: 'center',
+        }}
+      >
+        <h2
+          style={{
+            color: '#2b2d42',
+            margin: 0,
+            fontSize: '1.5rem',
+            marginBottom: '-5rem',
+            transform: 'translateX(-2rem)',
+            display: 'flex',
+            gap: '0.1rem',
+          }}
+        >
+          <span>Loading</span>
+          <span className="dot">.</span>
+          <span className="dot">.</span>
+          <span className="dot">.</span>
+        </h2>
+        <img
+          src="/board/loader.gif"
+          alt="Loading animation"
+          style={{
+            width: 'min(80vw, 400px)',
+            height: 'auto',
+          }}
+        />
       </div>
+
+      <style>
+        {`
+          .dot {
+            opacity: 0;
+            animation: blink 1.5s infinite;
+          }
+          .dot:nth-child(2) { animation-delay: 0.3s; }
+          .dot:nth-child(3) { animation-delay: 0.6s; }
+          .dot:nth-child(4) { animation-delay: 0.9s; }
+
+          @keyframes blink {
+            0%, 20% { opacity: 0; }
+            30%, 100% { opacity: 1; }
+          }
+        `}
+      </style>
     </div>
   )
 }
