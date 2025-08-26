@@ -178,6 +178,9 @@ button:active {
     max-height: 80vh;
     overflow-y: auto;
 }
+#student-notes-modal .modal-content {
+    max-width: 800px;
+}
 #modal-student-list .action-btn {
     padding: 0.4rem 0.8rem;
     border: none;
@@ -384,4 +387,5 @@ body,
     border: 1px solid var(--border-color);
     border-radius: 6px;
     resize: vertical;
+	box-sizing: border-box;
 }
