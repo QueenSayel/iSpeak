@@ -135,9 +135,17 @@
   box-shadow: 2px 0 10px rgba(0, 0, 0, 0.2);
   border-radius: 0 10px 10px 0;
   padding: 1rem;
-  overflow-y: auto;
+  overflow-y: scroll;   /* Keep scrolling active */
   order: 1;
   pointer-events: none;
+
+  /* Hide scrollbar but keep scrolling */
+  scrollbar-width: none;      /* Firefox */
+  -ms-overflow-style: none;   /* IE / Edge */
+}
+
+.switcher-panel::-webkit-scrollbar {
+  display: none;  /* Chrome, Safari */
 }
 
 .switcher-tab {
