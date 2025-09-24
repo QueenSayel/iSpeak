@@ -60,20 +60,15 @@ button i { margin: 0 0.5rem; }
     position: absolute; width: 100%; height: 100%; backface-visibility: hidden;
     background-color: var(--light-gray); color: var(--dark-color); border-radius: 12px;
     box-shadow: 0 10px 30px rgba(0,0,0,0.3); display: flex; flex-direction: column;
-    justify-content: center; align-items: center; box-sizing: border-box;
+    justify-content: center; align-items: center; padding: 2rem; box-sizing: border-box;
     overflow: auto;
 }
 #card-back { transform: rotateY(180deg); }
 
-/* #1: IMAGE SIZING FIX - Relying purely on CSS for best fit */
 .card-image {
-    display: none;
-    max-width: 100%;   /* Will not exceed the width of its container */
-    max-height: 80%;   /* Will not exceed 80% of the container's height */
-    object-fit: contain; /* This ensures the aspect ratio is maintained and it fits inside */
-    margin-bottom: 1rem;
+    display: none; max-width: 100%; max-height: 80%;
+    object-fit: contain; margin-bottom: 1rem;
 }
-
 .card-text { font-size: 2.5rem; font-weight: bold; text-align: center; }
 .card-definition {
     display: none; margin-top: 1.5rem; border-top: 1px solid #e2e8f0;
@@ -81,18 +76,16 @@ button i { margin: 0 0.5rem; }
 }
 #card-back .card-definition { display: block; }
 
-/* #3: REVEAL BOX FIX - Make it cover the container */
 #reveal-box {
     position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
+    /* Size and position are now set by JavaScript */
     background-color: #ffc107;
-    border-radius: 12px; /* Match the flashcard's border-radius */
+    border-radius: 6px; /* Match image radius if any */
     cursor: move;
     z-index: 10;
     display: none;
+    /* Add a smooth transition for when the size changes between cards */
+    transition: width 0.3s ease, height 0.3s ease, top 0.3s ease, left 0.3s ease;
 }
 
 /* --- Memory Game Styles --- */
@@ -105,23 +98,14 @@ button i { margin: 0 0.5rem; }
     gap: 1rem; width: 100%; max-width: 1200px;
     flex-grow: 1; perspective: 1000px;
 }
-/* #2: NEW MEMORY CONTROLS STYLING */
 .memory-controls {
-    margin-top: 1.5rem;
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    color: white;
+    margin-top: 1.5rem; display: flex; align-items: center;
+    gap: 0.75rem; color: white;
 }
 #memory-timer-input {
-    width: 50px;
-    padding: 0.5rem;
-    border-radius: 6px;
-    border: 1px solid white;
-    background: transparent;
-    color: white;
-    font-size: 1rem;
-    text-align: center;
+    width: 50px; padding: 0.5rem; border-radius: 6px;
+    border: 1px solid white; background: transparent; color: white;
+    font-size: 1rem; text-align: center;
 }
 #start-game-btn { padding: 0.8rem 2rem; font-size: 1.2rem; }
 
@@ -142,7 +126,13 @@ button i { margin: 0 0.5rem; }
     box-sizing: border-box; padding: 0.5rem; overflow: hidden;
     text-align: center;
 }
-.memory-front { background-color: var(--memory-cover-color); }
+/* #1: STYLING FOR MEMORY CARD NUMBERS */
+.memory-front {
+    background-color: var(--memory-cover-color);
+    font-size: 2rem;
+    font-weight: bold;
+    color: rgba(255, 255, 255, 0.5);
+}
 .memory-back {
     background-color: var(--light-gray); color: var(--dark-color);
     transform: rotateY(180deg); font-weight: 500; font-size: 1rem;
