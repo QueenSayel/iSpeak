@@ -1,0 +1,70 @@
+<!-- study.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Study Mode</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <link rel="stylesheet" href="/src/study.css">
+</head>
+<body>
+    <div id="loading-overlay">
+        <div class="spinner"></div>
+        <p>Loading Set...</p>
+    </div>
+
+    <header class="study-header">
+        <h1 id="set-name-heading">...</h1>
+        <div class="study-controls">
+            <button id="prev-card-btn"><i class="fa-solid fa-arrow-left"></i> Prev</button>
+            <span id="card-counter">0 / 0</span>
+            <button id="next-card-btn">Next <i class="fa-solid fa-arrow-right"></i></button>
+        </div>
+        <div class="mode-switcher">
+            <button data-mode="linear" class="mode-btn active">
+                <i class="fa-solid fa-book-open"></i> Linear
+            </button>
+            <button data-mode="reveal" class="mode-btn">
+                <i class="fa-solid fa-search"></i> Reveal
+            </button>
+			<button data-mode="memory" class="mode-btn">
+                <i class="fa-solid fa-puzzle-piece"></i> Memory
+            </button>
+        </div>
+    </header>
+
+    <main id="study-area">
+        <div id="flashcard-viewport">
+            <div id="flashcard-container">
+                <!-- Front of the Card -->
+                <div class="flashcard-face" id="card-front">
+                    <img src="" alt="Front Image" class="card-image">
+                    <div class="card-text"></div>
+                </div>
+                <!-- Back of the Card -->
+                <div class="flashcard-face" id="card-back">
+                    <img src="" alt="Back Image" class="card-image">
+                    <div class="card-text"></div>
+                    <div class="card-definition"></div>
+                </div>
+            </div>
+            <!-- Draggable overlay for Reveal mode -->
+            <div id="reveal-box"></div>
+        </div>
+        <div id="memory-game-container">
+            <div id="memory-grid"></div>
+            <!-- ===== MODIFICATION START ===== -->
+            <div class="memory-controls">
+                <label for="memory-timer-input">Reveal for:</label>
+                <input type="number" id="memory-timer-input" value="3" min="1" max="10">
+                <span>seconds</span>
+                <button id="start-game-btn">Start Game</button>
+            </div>
+            <!-- ===== MODIFICATION END ===== -->
+        </div>
+    </main>
+
+    <script type="module" src="/src/study.js"></script>
+</body>
+</html>
