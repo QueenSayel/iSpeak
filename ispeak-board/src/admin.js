@@ -36,6 +36,40 @@ const modalStudentName = document.getElementById('modal-student-name');
 const studentNotesTextarea = document.getElementById('student-notes-textarea');
 const saveNotesBtn = document.getElementById('save-notes-btn');
 const closeNotesModalBtn = document.getElementById('close-notes-modal-btn');
+const lessonsTabBtn = document.getElementById('lessons-tab-btn');
+const lessonsContent = document.getElementById('lessons-content');
+const lessonList = document.getElementById('lesson-list');
+const lessonDetailsModal = document.getElementById('lesson-details-modal');
+const modalLessonTitle = document.getElementById('modal-lesson-title');
+const modalLessonInfo = document.getElementById('modal-lesson-info');
+const saveLessonNotesBtn = document.getElementById('save-lesson-notes-btn');
+const closeLessonModalBtn = document.getElementById('close-lesson-modal-btn');
+const flashcardsTabBtn = document.getElementById('flashcards-tab-btn');
+const flashcardsContent = document.getElementById('flashcards-content');
+const categoryList = document.getElementById('flashcard-category-list');
+const setList = document.getElementById('flashcard-set-list');
+const flashcardList = document.getElementById('flashcard-list');
+const newCategoryForm = document.getElementById('new-category-form');
+const newSetForm = document.getElementById('new-set-form');
+const newCategoryNameInput = document.getElementById('new-category-name');
+const newSetNameInput = document.getElementById('new-set-name');
+const selectedCategoryNameSpan = document.getElementById('selected-category-name');
+const selectedSetNameSpan = document.getElementById('selected-set-name');
+const flashcardListPlaceholder = document.getElementById('flashcard-list-placeholder');
+const addNewCardBtn = document.getElementById('add-new-card-btn');
+const flashcardEditorContainer = document.getElementById('flashcard-editor-container');
+const editorHeading = document.getElementById('editor-heading');
+const flashcardEditorForm = document.getElementById('flashcard-editor-form');
+const editingCardIdInput = document.getElementById('editing-card-id');
+const cardFrontTextInput = document.getElementById('card-front-text');
+const cardBackTextInput = document.getElementById('card-back-text');
+const cardDefinitionInput = document.getElementById('card-definition');
+const frontImagePreview = document.getElementById('front-image-preview');
+const backImagePreview = document.getElementById('back-image-preview');
+const cardFrontImageInput = document.getElementById('card-front-image');
+const cardBackImageInput = document.getElementById('card-back-image');
+const saveCardBtn = document.getElementById('save-card-btn');
+const cancelEditBtn = document.getElementById('cancel-edit-btn');
 
 let currentManagingBoardId = null; // Stores the ID of the board being managed in the modal
 let calendar = null; // A variable to hold the calendar instance
@@ -43,6 +77,12 @@ let adminProfile = null; // An in-memory array to hold our availability events
 let currentSelectedEvent = null;
 let currentNotesStudentId = null;
 let studentNotesCache = new Map();
+let lessonNotesCache = new Map();
+let allStudentsCache = [];
+let boardsCache = new Map();
+let finishedLessonsCache = []; // Cache for finished lessons
+let quill = null; // To hold the Quill editor instance
+let currentLessonId = null; // To track the lesson in the modal
 
 // --- AUTH GUARD (Checks for admin role) ---
 async function checkAdminAuth() {
@@ -59,9 +99,33 @@ async function checkAdminAuth() {
 }
 
 // --- TAB SWITCHING LOGIC ---
-boardsTabBtn.addEventListener('click', () => { boardsContent.classList.add('active'); studentsContent.classList.remove('active'); scheduleContent.classList.remove('active'); boardsTabBtn.classList.add('active'); studentsTabBtn.classList.remove('active'); scheduleTabBtn.classList.remove('active'); });
-studentsTabBtn.addEventListener('click', () => { studentsContent.classList.add('active'); boardsContent.classList.remove('active'); scheduleContent.classList.remove('active'); studentsTabBtn.classList.add('active'); boardsTabBtn.classList.remove('active'); scheduleTabBtn.classList.remove('active'); });
-scheduleTabBtn.addEventListener('click', () => { scheduleContent.classList.add('active'); boardsContent.classList.remove('active'); studentsContent.classList.remove('active'); scheduleTabBtn.classList.add('active'); boardsTabBtn.classList.remove('active'); studentsTabBtn.classList.remove('active'); });
+const sidebarNav = document.querySelector('.sidebar-nav');
+const contentTabs = document.querySelectorAll('.content-tab');
+
+sidebarNav.addEventListener('click', (e) => {
+    const clickedLink = e.target.closest('.tab-btn');
+    if (!clickedLink) return;
+
+    e.preventDefault(); // Prevent default anchor link behavior
+
+    const targetContentId = clickedLink.id.replace('-tab-btn', '-content');
+    const targetContent = document.getElementById(targetContentId);
+
+    // Deactivate all tab links and hide all content panes
+    sidebarNav.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+    contentTabs.forEach(content => content.classList.remove('active'));
+
+    // Activate the clicked link and show the corresponding content
+    clickedLink.classList.add('active');
+    if (targetContent) {
+        targetContent.classList.add('active');
+    }
+
+    // If the lessons tab was clicked, fetch its data
+    if (clickedLink.id === 'lessons-tab-btn') {
+        fetchFinishedLessons();
+    }
+});
 
 function initializeCalendar() {
     if (calendar) return;
@@ -83,35 +147,38 @@ function initializeCalendar() {
 
         // --- DATA SOURCE: FETCH FROM SUPABASE ---
 		events: async function(fetchInfo) {
-			// This query is now more powerful: it gets the email AND the meeting_link
 			const { data, error } = await supabase
 				.from('availability')
-				.select('*, profiles:booked_by(email, meeting_link)'); // Get both fields
-			
+				.select('*, profiles:booked_by(email, meeting_link)');
 			if (error) { console.error('Error fetching availability:', error); return []; }
 
 			return data.map(slot => {
-				const isPast = new Date(slot.end_time) < new Date(); // past slot?
+				const isPast = new Date(slot.end_time) < new Date();
+				let title, backgroundColor, editable;
 
-				// Only modify available slots that are past
-				let title = slot.status === 'available' ? (isPast ? 'Expired' : 'Available') : 'Booked';
+				if (slot.status === 'available') {
+					title = isPast ? 'Expired' : 'Available';
+					backgroundColor = isPast ? '#6c757d' : '#28a745';
+					editable = !isPast;
+				} else { // status is 'booked'
+					title = isPast ? 'Finished' : 'Booked';
+					backgroundColor = isPast ? '#4a5568' : '#e53e3e'; // New color for Finished
+					editable = false; // Booked slots are never editable
+				}
 
 				return {
 					id: slot.id,
 					start: slot.start_time,
 					end: slot.end_time,
 					title,
-					backgroundColor: slot.status === 'available'
-						? (isPast ? '#6c757d' : '#28a745') // grey for expired available
-						: '#e53e3e', // booked slots stay red
-					borderColor: slot.status === 'available'
-						? (isPast ? '#6c757d' : '#28a745')
-						: '#e53e3e',
-					editable: !isPast && slot.status === 'available', // past = not editable
+					backgroundColor,
+					borderColor: backgroundColor, // Border matches background
+					editable,
 					extendedProps: {
 						bookerEmail: slot.profiles ? slot.profiles.email : null,
 						meetingLink: slot.profiles ? slot.profiles.meeting_link : null,
-						isPast
+						isPast,
+						status: slot.status // Pass status for modal logic
 					}
 				};
 			});
@@ -202,10 +269,32 @@ function initializeCalendar() {
 
 // --- DATA FETCHING ---
 async function fetchBoards() {
-    const { data: boards, error } = await supabase.from('boards').select('id, name, created_at').order('created_at', { ascending: false });
-    if (error) { console.error('Error fetching boards:', error); boardList.innerHTML = '<li>Could not load boards.</li>'; return; }
+    // This single query gets all boards AND their members.
+    const { data: boards, error } = await supabase
+        .from('boards')
+        .select('id, name, created_at, board_members(user_id)')
+        .order('created_at', { ascending: false });
+
+    if (error) {
+        console.error('Error fetching boards:', error);
+        boardList.innerHTML = '<li>Could not load boards.</li>';
+        return;
+    }
+
+    // Clear and populate the cache with board data and a Set of member IDs for fast lookups.
+    boardsCache.clear();
+    boards.forEach(board => {
+        boardsCache.set(board.id, {
+            ...board,
+            memberIds: new Set(board.board_members.map(m => m.user_id))
+        });
+    });
+
+    // Render the list to the DOM
     boardList.innerHTML = '';
-    if (boards.length === 0) { boardList.innerHTML = '<li>No boards found. Create one below!</li>'; } else {
+    if (boards.length === 0) {
+        boardList.innerHTML = '<li>No boards found. Create one below!</li>';
+    } else {
         boards.forEach(board => {
             const li = document.createElement('li');
             li.innerHTML = `
@@ -214,8 +303,12 @@ async function fetchBoards() {
                     <small style="display: block; color: #888;">Created: ${new Date(board.created_at).toLocaleString()}</small>
                 </div>
                 <div>
-                    <button class="manage-btn" data-id="${board.id}" data-name="${board.name}">Manage Access</button>
-                    <button class="delete-btn" data-id="${board.id}">Delete</button>
+                    <button class="action-icon-btn manage-btn" data-id="${board.id}" data-name="${board.name}" title="Manage Access">
+                        <i class="fa-solid fa-users-gear"></i>
+                    </button>
+                    <button class="action-icon-btn delete-btn" data-id="${board.id}" title="Delete Board">
+                        <i class="fa-solid fa-trash-can"></i>
+                    </button>
                 </div>
             `;
             boardList.appendChild(li);
@@ -237,6 +330,8 @@ async function fetchStudents() {
         studentList.innerHTML = '<li>Could not load students.</li>';
         return;
     }
+
+	allStudentsCache = profiles.filter(p => p.role === 'student');
 
     if (profiles.length === 0) {
         studentList.innerHTML = '<li>No students have registered yet.</li>';
@@ -306,6 +401,13 @@ function toLocalISOString(date) {
 async function openEventDetailsModal(event) {
     currentSelectedEvent = event;
     const isPast = event.extendedProps.isPast;
+	
+    if (status === 'booked' && isPast) {
+        cancelBookingBtn.style.display = 'none';
+    } else {
+        cancelBookingBtn.style.display = 'inline-block';
+    }
+	
     const isAvailable = event.title === 'Available' || event.title === 'Expired';
 
     // Get the parent '.form-group' divs for the time inputs
@@ -359,6 +461,126 @@ async function openEventDetailsModal(event) {
 
     eventDetailsModal.style.display = 'flex';
 }
+
+async function fetchFinishedLessons() {
+    lessonList.innerHTML = '<li>Loading finished lessons...</li>';
+    const { data, error } = await supabase
+        .from('availability')
+        .select('id, start_time, end_time, profiles:booked_by(id, email)')
+        .eq('status', 'booked')
+        .lt('end_time', new Date().toISOString()) // 'lt' = less than (in the past)
+        .order('start_time', { ascending: false });
+
+    if (error) {
+        console.error('Error fetching finished lessons:', error);
+        lessonList.innerHTML = '<li>Could not load lessons.</li>';
+        return;
+    }
+
+    finishedLessonsCache = data; // Cache the data
+
+    if (data.length === 0) {
+        lessonList.innerHTML = '<li>No finished lessons found.</li>';
+        return;
+    }
+
+    lessonList.innerHTML = '';
+    data.forEach(lesson => {
+        const li = document.createElement('li');
+        li.className = 'lesson-item';
+        li.dataset.lessonId = lesson.id;
+        li.innerHTML = `
+            <div>
+                <strong>Student: ${lesson.profiles.email}</strong>
+                <small>Finished: ${new Date(lesson.end_time).toLocaleString()}</small>
+            </div>
+            <div><i class="fa-solid fa-chevron-right"></i></div>
+        `;
+        lessonList.appendChild(li);
+    });
+}
+
+async function openLessonDetailsModal(lessonId) {
+    currentLessonId = lessonId;
+    const lesson = finishedLessonsCache.find(l => l.id == lessonId);
+    if (!lesson) return;
+
+    modalLessonInfo.innerHTML = `
+        <strong>Student:</strong> ${lesson.profiles.email}<br>
+        <strong>Date:</strong> ${new Date(lesson.start_time).toLocaleDateString()}
+    `;
+    lessonDetailsModal.style.display = 'flex';
+
+    // Initialize Quill Editor
+    if (!quill) {
+        quill = new Quill('#quill-editor', {
+            theme: 'snow',
+            modules: { toolbar: [
+                [{ 'header': [1, 2, false] }],
+                ['bold', 'italic', 'underline'],
+                [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+                ['clean']
+            ]}
+        });
+    }
+    quill.setContents([]); // Clear previous content
+
+    // Fetch existing lesson notes
+    const { data, error } = await supabase
+        .from('lesson_notes')
+        .select('note_content')
+        .eq('lesson_id', lessonId)
+        .single();
+
+    if (data && data.note_content) {
+        quill.setContents(data.note_content);
+    }
+    
+    if (error && error.code !== 'PGRST116') {
+        console.error("Error fetching lesson notes:", error);
+    }
+}
+
+// Add New Event Listeners
+lessonList.addEventListener('click', (e) => {
+    const lessonItem = e.target.closest('.lesson-item');
+    if (lessonItem) {
+        openLessonDetailsModal(lessonItem.dataset.lessonId);
+    }
+});
+
+saveLessonNotesBtn.addEventListener('click', async () => {
+    if (!quill || !currentLessonId) return;
+
+    const originalButtonText = saveLessonNotesBtn.innerHTML;
+    saveLessonNotesBtn.disabled = true;
+    saveLessonNotesBtn.innerHTML = 'Saving...';
+    
+    const noteContent = quill.getContents(); // Get content as Delta object
+
+    const { error } = await supabase.from('lesson_notes').upsert({
+        lesson_id: currentLessonId,
+        note_content: noteContent,
+        last_updated_by: adminProfile.id
+    }, { onConflict: 'lesson_id' });
+
+    if (error) {
+        alert('Failed to save lesson notes.');
+        console.error(error);
+        saveLessonNotesBtn.innerHTML = originalButtonText;
+    } else {
+        saveLessonNotesBtn.innerHTML = '<i class="fa-solid fa-check"></i> Saved!';
+        setTimeout(() => {
+            saveLessonNotesBtn.innerHTML = originalButtonText;
+        }, 2000);
+    }
+    saveLessonNotesBtn.disabled = false;
+});
+
+closeLessonModalBtn.addEventListener('click', () => {
+    lessonDetailsModal.style.display = 'none';
+    currentLessonId = null;
+});
 
 function closeEventDetailsModal() {
     eventDetailsModal.style.display = 'none';
@@ -487,38 +709,38 @@ cancelBookingBtn.addEventListener('click', async () => {
 
 closeEventModalBtn.addEventListener('click', closeEventDetailsModal);
 
-async function openManageModal(boardId, boardName) {
+function openManageModal(boardId, boardName) {
     currentManagingBoardId = boardId;
-    modalBoardName.textContent = `Manage Access for "${boardName}"`;
-    modalStudentList.innerHTML = '<li>Loading students...</li>';
-    manageAccessModal.style.display = 'flex';
-
-    try {
-        const [allStudentsRes, currentMembersRes] = await Promise.all([
-            supabase.from('profiles').select('id, email').eq('role', 'student'),
-            supabase.from('board_members').select('user_id').eq('board_id', boardId)
-        ]);
-        if (allStudentsRes.error || currentMembersRes.error) throw new Error('Failed to fetch modal data.');
-        
-        const allStudents = allStudentsRes.data;
-        const currentMemberIds = new Set(currentMembersRes.data.map(m => m.user_id));
-        
-        modalStudentList.innerHTML = '';
-        allStudents.forEach(student => {
-            const li = document.createElement('li');
-            const isMember = currentMemberIds.has(student.id);
-            li.innerHTML = `
-                <span>${student.email}</span>
-                <button class="action-btn ${isMember ? 'remove-btn' : 'add-btn'}" data-student-id="${student.id}">
-                    ${isMember ? 'Remove' : 'Add'}
-                </button>
-            `;
-            modalStudentList.appendChild(li);
-        });
-    } catch (error) {
-        console.error(error);
-        modalStudentList.innerHTML = '<li>Error loading data.</li>';
+    modalBoardName.innerHTML = `<i class="fa-solid fa-user-gear"></i> Manage Access for "${boardName}"`;
+    
+    // 1. Get all necessary data directly from the cache.
+    const boardData = boardsCache.get(boardId);
+    if (!boardData) {
+        modalStudentList.innerHTML = '<li>Error: Board data not found.</li>';
+        return;
     }
+    const currentMemberIds = boardData.memberIds;
+
+    if (allStudentsCache.length === 0) {
+        modalStudentList.innerHTML = '<li>No students found to grant access to.</li>';
+        return;
+    }
+
+    // 2. Render the list INSTANTLY and ACCURATELY.
+    modalStudentList.innerHTML = '';
+    allStudentsCache.forEach(student => {
+        const li = document.createElement('li');
+        const isMember = currentMemberIds.has(student.id);
+        li.innerHTML = `
+            <span>${student.email}</span>
+            <button class="action-icon-btn ${isMember ? 'remove-btn' : 'add-btn'}" data-student-id="${student.id}" title="${isMember ? 'Remove Access' : 'Add Access'}">
+                <i class="fa-solid ${isMember ? 'fa-user-minus' : 'fa-user-plus'}"></i>
+            </button>
+        `;
+        modalStudentList.appendChild(li);
+    });
+
+    manageAccessModal.style.display = 'flex';
 }
 
 // --- EVENT LISTENERS ---
@@ -526,9 +748,55 @@ newBoardForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const boardName = newBoardNameInput.value.trim();
     if (!boardName) return;
-    const { error } = await supabase.from('boards').insert({ name: boardName, content: {} });
-    if (error) { console.error('Error creating board:', error); alert('Failed to create board.'); }
-    else { newBoardNameInput.value = ''; fetchBoards(); }
+
+    // 1. Optimistic UI Update
+    newBoardNameInput.value = ''; // Clear input immediately
+    const tempListId = `temp-${Date.now()}`;
+    const li = document.createElement('li');
+    li.id = tempListId;
+    li.style.opacity = '0.7';
+    li.innerHTML = `
+        <div>
+            <a>${boardName}</a>
+            <small style="display: block; color: #888;">Saving...</small>
+        </div>
+        <div><!-- Placeholder for buttons --></div>
+    `;
+    boardList.prepend(li); // Adds the new item to the top of the list
+
+    // 2. Sync with Database
+    const { data, error } = await supabase
+        .from('boards')
+        .insert({ name: boardName, content: {} })
+        .select()
+        .single();
+
+    // 3. Handle Result
+    const newBoardElement = document.getElementById(tempListId);
+    if (error) {
+        console.error('Error creating board:', error);
+        alert('Failed to create board. The item will be removed.');
+        newBoardElement?.remove(); // Rollback: Remove the temporary element
+    } else {
+        // Success: Update the temporary element with real data
+        if (newBoardElement) {
+            newBoardElement.style.opacity = '1';
+            newBoardElement.innerHTML = `
+                <div>
+                    <a href="/board/b/${data.id}" target="_blank">${data.name}</a>
+                    <small style="display: block; color: #888;">Created: ${new Date(data.created_at).toLocaleString()}</small>
+                </div>
+                <div>
+                    <button class="action-icon-btn manage-btn" data-id="${data.id}" data-name="${data.name}" title="Manage Access">
+                        <i class="fa-solid fa-users-gear"></i>
+                    </button>
+                    <button class="action-icon-btn delete-btn" data-id="${data.id}" title="Delete Board">
+                        <i class="fa-solid fa-trash-can"></i>
+                    </button>
+                </div>
+            `;
+        }
+    }
 });
 
 boardList.addEventListener('click', async (e) => {
@@ -537,33 +805,82 @@ boardList.addEventListener('click', async (e) => {
         openManageModal(manageButton.dataset.id, manageButton.dataset.name);
         return;
     }
+    
     const deleteButton = e.target.closest('.delete-btn');
     if (deleteButton) {
         const boardId = deleteButton.dataset.id;
-        const boardName = deleteButton.parentElement.parentElement.querySelector('a').textContent;
-        if (confirm(`Are you sure you want to delete the board "${boardName}"? This cannot be undone.`)) {
+        const boardItem = deleteButton.closest('li');
+        const boardName = boardItem.querySelector('a').textContent;
+
+        if (confirm(`Are you sure you want to delete the board "${boardName}"?`)) {
+            // 1. Optimistic UI Update
+            const originalDisplay = boardItem.style.display;
+            boardItem.style.transition = 'opacity 0.3s ease';
+            boardItem.style.opacity = '0.3'; // Visually indicate deletion
+            
+            // 2. Sync with Database
             const { error } = await supabase.from('boards').delete().eq('id', boardId);
-            if (error) { console.error('Error deleting board:', error); alert('Failed to delete board.'); }
-            else { fetchBoards(); }
+
+            // 3. Handle Result
+            if (error) {
+                console.error('Error deleting board:', error);
+                alert('Failed to delete board.');
+                boardItem.style.opacity = '1'; // Rollback on failure
+            } else {
+                // Success: Permanently remove after the fade out
+                setTimeout(() => boardItem.remove(), 300);
+            }
         }
     }
 });
 
 modalStudentList.addEventListener('click', async (e) => {
-    const actionButton = e.target.closest('.action-btn');
-    if (!actionButton) return;
+    const actionButton = e.target.closest('.action-icon-btn');
+    if (!actionButton || actionButton.disabled) return;
 
     const studentId = actionButton.dataset.studentId;
     const isRemoving = actionButton.classList.contains('remove-btn');
-    let error;
+    const boardData = boardsCache.get(currentManagingBoardId);
+    const icon = actionButton.querySelector('i'); // Get the icon element
 
+    // 1. Optimistic UI and Cache Update
+    actionButton.disabled = true;
     if (isRemoving) {
-        ({ error } = await supabase.from('board_members').delete().match({ board_id: currentManagingBoardId, user_id: studentId }));
+        boardData.memberIds.delete(studentId);
+        actionButton.classList.replace('remove-btn', 'add-btn');
+        icon.className = 'fa-solid fa-user-plus'; // Change icon
+        actionButton.title = 'Add Access';
     } else {
-        ({ error } = await supabase.from('board_members').insert({ board_id: currentManagingBoardId, user_id: studentId }));
+        boardData.memberIds.add(studentId);
+        actionButton.classList.replace('add-btn', 'remove-btn');
+        icon.className = 'fa-solid fa-user-minus'; // Change icon
+        actionButton.title = 'Remove Access';
     }
-    if (error) { console.error('Error updating membership:', error); alert('Could not update membership.'); }
-    else { openManageModal(currentManagingBoardId, modalBoardName.textContent.match(/"([^"]+)"/)[1]); }
+
+    // 2. Sync with Database
+    const { error } = isRemoving
+        ? await supabase.from('board_members').delete().match({ board_id: currentManagingBoardId, user_id: studentId })
+        : await supabase.from('board_members').insert({ board_id: currentManagingBoardId, user_id: studentId });
+    
+    // 3. Handle Result (Rollback)
+    if (error) {
+        console.error('Error updating membership:', error);
+        alert('Could not update membership.');
+        // Revert cache and UI
+        if (isRemoving) {
+            boardData.memberIds.add(studentId);
+            actionButton.classList.replace('add-btn', 'remove-btn');
+            icon.className = 'fa-solid fa-user-minus';
+            actionButton.title = 'Remove Access';
+        } else {
+            boardData.memberIds.delete(studentId);
+            actionButton.classList.replace('remove-btn', 'add-btn');
+            icon.className = 'fa-solid fa-user-plus';
+            actionButton.title = 'Add Access';
+        }
+    }
+    
+    actionButton.disabled = false;
 });
 
 closeModalBtn.addEventListener('click', () => {
@@ -576,9 +893,352 @@ logoutBtn.addEventListener('click', async () => {
     window.location.href = '/board/login.html';
 });
 
+const CLOUDINARY_CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
+const CLOUDINARY_UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
+
+if (!CLOUDINARY_CLOUD_NAME || !CLOUDINARY_UPLOAD_PRESET) {
+    console.error("Cloudinary environment variables are not set! Please check your Netlify configuration.");
+    // You could even disable the file inputs here to prevent errors.
+}
+
+let flashcardState = {
+    categories: [],
+    sets: [],
+    cards: [],
+    selectedCategoryId: null,
+    selectedSetId: null,
+};
+
+let flashcardDataFetched = false;
+
+// --- DATA FETCHING & RENDERING ---
+
+async function fetchFlashcardCategories() {
+    const { data, error } = await supabase.from('categories').select('id, name').order('created_at');
+    if (error) { console.error('Error fetching categories', error); return; }
+    flashcardState.categories = data;
+    renderCategories();
+}
+
+function renderCategories() {
+    categoryList.innerHTML = '';
+    if (flashcardState.categories.length === 0) {
+        categoryList.innerHTML = '<li>No categories yet.</li>';
+    }
+    flashcardState.categories.forEach(cat => {
+        const li = document.createElement('li');
+        li.dataset.id = cat.id;
+        li.innerHTML = `<span>${cat.name}</span> <button class="delete-fc-btn" title="Delete Category"><i class="fa-solid fa-trash"></i></button>`;
+        if (cat.id === flashcardState.selectedCategoryId) {
+            li.classList.add('active');
+        }
+        categoryList.appendChild(li);
+    });
+}
+
+async function fetchSetsForCategory(categoryId) {
+    const { data, error } = await supabase.from('flashcard_sets').select('*').eq('category_id', categoryId).order('created_at');
+    if (error) { console.error('Error fetching sets', error); return; }
+    flashcardState.sets = data;
+    renderSets();
+}
+
+function renderSets() {
+    setList.innerHTML = '';
+    if (flashcardState.sets.length === 0) {
+        setList.innerHTML = '<li>No sets in this category.</li>';
+    }
+    flashcardState.sets.forEach(set => {
+        const li = document.createElement('li');
+        li.dataset.id = set.id;
+        
+        // ===== MODIFICATION START =====
+        // We're adding an anchor tag <a> that acts as a button
+        li.innerHTML = `
+            <span>${set.name}</span> 
+            <div class="fc-list-buttons">
+                <a href="/board/study.html?set_id=${set.id}" target="_blank" class="action-icon-btn view-set-btn" title="Study this Set">
+                    <i class="fa-solid fa-eye"></i>
+                </a>
+                <button class="delete-fc-btn" title="Delete Set">
+                    <i class="fa-solid fa-trash"></i>
+                </button>
+            </div>
+        `;
+        // ===== MODIFICATION END =====
+
+        if (set.id === flashcardState.selectedSetId) {
+            li.classList.add('active');
+        }
+        setList.appendChild(li);
+    });
+}
+
+async function fetchFlashcardsForSet(setId) {
+    const { data, error } = await supabase.from('flashcards').select('*').eq('set_id', setId).order('created_at');
+    if (error) { console.error('Error fetching flashcards', error); return; }
+    flashcardState.cards = data;
+    renderFlashcards();
+}
+
+function renderFlashcards() {
+    flashcardList.innerHTML = '';
+    if (flashcardState.cards.length === 0) {
+        flashcardList.innerHTML = '<li>This set is empty.</li>';
+    }
+    flashcardState.cards.forEach(card => {
+        const li = document.createElement('li');
+        li.dataset.id = card.id;
+        const frontContent = card.front_image_url ? 'Image' : card.front_text;
+        li.innerHTML = `<span>${frontContent}</span> <button class="delete-fc-btn" title="Delete Card"><i class="fa-solid fa-trash"></i></button>`;
+        flashcardList.appendChild(li);
+    });
+}
+
+// --- UI STATE MANAGEMENT ---
+
+function showEditor(card = null) {
+    flashcardEditorForm.reset();
+    frontImagePreview.style.display = 'none';
+    backImagePreview.style.display = 'none';
+
+    if (card) {
+        // Editing existing card
+        editorHeading.innerHTML = '<i class="fa-solid fa-pen-to-square"></i> Edit Card';
+        editingCardIdInput.value = card.id;
+        cardFrontTextInput.value = card.front_text || '';
+        cardBackTextInput.value = card.back_text || '';
+        cardDefinitionInput.value = card.definition || '';
+        if (card.front_image_url) {
+            frontImagePreview.src = card.front_image_url;
+            frontImagePreview.style.display = 'block';
+        }
+        if (card.back_image_url) {
+            backImagePreview.src = card.back_image_url;
+            backImagePreview.style.display = 'block';
+        }
+    } else {
+        // Creating new card
+        editorHeading.innerHTML = '<i class="fa-solid fa-pen-to-square"></i> Create New Card';
+        editingCardIdInput.value = '';
+    }
+	flashcardsContent.classList.add('editor-active');
+    flashcardEditorContainer.style.display = 'block';
+}
+
+function hideEditor() {
+	flashcardsContent.classList.remove('editor-active');
+    flashcardEditorContainer.style.display = 'none';
+    flashcardEditorForm.reset();
+}
+
+// --- EVENT LISTENERS ---
+
+// Initial fetch when tab is clicked for the first time
+flashcardsTabBtn.addEventListener('click', () => {
+    if (!flashcardDataFetched) {
+        fetchFlashcardCategories();
+        flashcardDataFetched = true;
+    }
+});
+
+// Select a category
+categoryList.addEventListener('click', async (e) => {
+    const li = e.target.closest('li');
+    if (!li || !li.dataset.id) return;
+    
+    const deleteBtn = e.target.closest('.delete-fc-btn');
+    if (deleteBtn) {
+        if (confirm('Are you sure you want to delete this category and all of its sets/cards?')) {
+            const { error } = await supabase.from('categories').delete().eq('id', li.dataset.id);
+            if (error) alert('Failed to delete category.');
+            else fetchFlashcardCategories();
+        }
+        return;
+    }
+
+    flashcardState.selectedCategoryId = li.dataset.id;
+    flashcardState.selectedSetId = null;
+    const category = flashcardState.categories.find(c => c.id === li.dataset.id);
+    selectedCategoryNameSpan.textContent = category.name;
+    
+    // Reset and show/hide relevant UI
+    setList.innerHTML = '<li>Loading sets...</li>';
+    flashcardList.innerHTML = '';
+    flashcardListPlaceholder.style.display = 'block';
+    addNewCardBtn.style.display = 'none';
+    newSetForm.style.display = 'flex';
+    hideEditor();
+
+    renderCategories(); // Re-render to show active state
+    await fetchSetsForCategory(li.dataset.id);
+});
+
+// Select a set
+setList.addEventListener('click', async (e) => {
+    const li = e.target.closest('li');
+    if (!li || !li.dataset.id) return;
+
+    const deleteBtn = e.target.closest('.delete-fc-btn');
+    if (deleteBtn) {
+        if (confirm('Are you sure you want to delete this set and all of its cards?')) {
+            const { error } = await supabase.from('flashcard_sets').delete().eq('id', li.dataset.id);
+            if (error) alert('Failed to delete set.');
+            else fetchSetsForCategory(flashcardState.selectedCategoryId);
+        }
+        return;
+    }
+    
+    flashcardState.selectedSetId = li.dataset.id;
+    const set = flashcardState.sets.find(s => s.id === li.dataset.id);
+    selectedSetNameSpan.textContent = set.name;
+    
+    // Reset and show/hide
+    flashcardList.innerHTML = '<li>Loading cards...</li>';
+    flashcardListPlaceholder.style.display = 'none';
+    addNewCardBtn.style.display = 'block';
+    hideEditor();
+
+    renderSets(); // Re-render to show active state
+    await fetchFlashcardsForSet(li.dataset.id);
+});
+
+// Select a flashcard to edit
+flashcardList.addEventListener('click', async (e) => {
+    const li = e.target.closest('li');
+    if (!li || !li.dataset.id) return;
+
+    const deleteBtn = e.target.closest('.delete-fc-btn');
+    if (deleteBtn) {
+        if (confirm('Are you sure you want to delete this card?')) {
+            const { error } = await supabase.from('flashcards').delete().eq('id', li.dataset.id);
+            if (error) alert('Failed to delete card.');
+            else fetchFlashcardsForSet(flashcardState.selectedSetId);
+        }
+        return;
+    }
+
+    const cardToEdit = flashcardState.cards.find(c => c.id === li.dataset.id);
+    if (cardToEdit) showEditor(cardToEdit);
+});
+
+// Handle form submissions
+newCategoryForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const name = newCategoryNameInput.value.trim();
+    if (!name) return;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    
+    const { error } = await supabase.from('categories').insert({ name, user_id: user.id });
+    if (error) alert('Failed to create category.');
+    else {
+        newCategoryNameInput.value = '';
+        fetchFlashcardCategories();
+    }
+});
+
+newSetForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const name = newSetNameInput.value.trim();
+    if (!name || !flashcardState.selectedCategoryId) return;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { error } = await supabase.from('flashcard_sets').insert({ name, category_id: flashcardState.selectedCategoryId, user_id: user.id });
+    if (error) alert('Failed to create set.');
+    else {
+        newSetNameInput.value = '';
+        fetchSetsForCategory(flashcardState.selectedCategoryId);
+    }
+});
+
+// Show editor for new card
+addNewCardBtn.addEventListener('click', () => showEditor(null));
+cancelEditBtn.addEventListener('click', hideEditor);
+
+// Image upload and preview logic
+async function uploadImage(file) {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+
+    try {
+        const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`, {
+            method: 'POST',
+            body: formData
+        });
+        const data = await res.json();
+        return data.secure_url;
+    } catch (e) {
+        console.error('Upload failed', e);
+        return null;
+    }
+}
+
+cardFrontImageInput.addEventListener('change', () => {
+    if (cardFrontImageInput.files[0]) {
+        frontImagePreview.src = URL.createObjectURL(cardFrontImageInput.files[0]);
+        frontImagePreview.style.display = 'block';
+    }
+});
+ cardBackImageInput.addEventListener('change', () => {
+    if (cardBackImageInput.files[0]) {
+        backImagePreview.src = URL.createObjectURL(cardBackImageInput.files[0]);
+        backImagePreview.style.display = 'block';
+    }
+});
+
+// Save/Update a flashcard
+flashcardEditorForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!flashcardState.selectedSetId) return;
+
+    saveCardBtn.disabled = true;
+    saveCardBtn.innerHTML = 'Saving...';
+    
+    let frontImageUrl = editingCardIdInput.value ? flashcardState.cards.find(c => c.id === editingCardIdInput.value)?.front_image_url : undefined;
+    let backImageUrl = editingCardIdInput.value ? flashcardState.cards.find(c => c.id === editingCardIdInput.value)?.back_image_url : undefined;
+
+    if (cardFrontImageInput.files[0]) {
+        frontImageUrl = await uploadImage(cardFrontImageInput.files[0]);
+    }
+    if (cardBackImageInput.files[0]) {
+        backImageUrl = await uploadImage(cardBackImageInput.files[0]);
+    }
+
+    const cardData = {
+        set_id: flashcardState.selectedSetId,
+        front_text: cardFrontTextInput.value,
+        back_text: cardBackTextInput.value,
+        definition: cardDefinitionInput.value,
+        front_image_url: frontImageUrl,
+        back_image_url: backImageUrl,
+    };
+    
+    const { error } = editingCardIdInput.value
+        ? await supabase.from('flashcards').update(cardData).eq('id', editingCardIdInput.value)
+        : await supabase.from('flashcards').insert(cardData);
+
+    if (error) {
+        alert('Failed to save card.');
+        console.error(error);
+    } else {
+        hideEditor();
+        await fetchFlashcardsForSet(flashcardState.selectedSetId);
+    }
+    saveCardBtn.disabled = false;
+    saveCardBtn.innerHTML = '<i class="fa-solid fa-save"></i> Save Card';
+});
+
 // --- INITIALIZE THE PAGE ---
 async function init() {
     await checkAdminAuth();
+    // Set the initial active tab and content
+    document.getElementById('boards-tab-btn').classList.add('active');
+    document.getElementById('boards-content').classList.add('active');
+    
+    // Fetch data for the initially visible tabs or all tabs
     fetchBoards();
     fetchStudents();
 	initializeCalendar();
