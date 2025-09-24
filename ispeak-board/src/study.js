@@ -16,7 +16,8 @@ const flashcardViewport = document.getElementById('flashcard-viewport');
 const memoryGameContainer = document.getElementById('memory-game-container');
 const memoryGrid = document.getElementById('memory-grid');
 const startGameBtn = document.getElementById('start-game-btn');
-const memoryTimerInput = document.getElementById('memory-timer-input'); // #2 New element
+const memoryTimerInput = document.getElementById('memory-timer-input');
+const studyControls = document.querySelector('.study-controls');
 
 // --- STATE MANAGEMENT ---
 const state = {
@@ -32,6 +33,8 @@ const state = {
     lockBoard: false,
     matchedPairs: 0,
 };
+
+let resizeObserver = null;
 
 // --- DATA FETCHING ---
 async function loadSetData(setId) {
@@ -49,28 +52,61 @@ async function loadSetData(setId) {
 
 // --- RENDERING & UI LOGIC ---
 
+function updateRevealBoxForImage(imageElement) {
+    if (imageElement.style.display === 'none') {
+        revealBox.style.display = 'none';
+        return;
+    }
+    
+    const REVEAL_BOX_PADDING = 20;
+
+    const imageRect = imageElement.getBoundingClientRect();
+    const viewportRect = flashcardViewport.getBoundingClientRect();
+
+    const top = imageRect.top - viewportRect.top - (REVEAL_BOX_PADDING / 2);
+    const left = imageRect.left - viewportRect.left - (REVEAL_BOX_PADDING / 2);
+    const width = imageRect.width + REVEAL_BOX_PADDING;
+    const height = imageRect.height + REVEAL_BOX_PADDING;
+
+    revealBox.style.width = `${width}px`;
+    revealBox.style.height = `${height}px`;
+    revealBox.style.top = `${top}px`;
+    revealBox.style.left = `${left}px`;
+    
+    if (state.currentMode === 'reveal') {
+        revealBox.style.display = 'block';
+    }
+}
+
 function renderCurrentCard() {
     if (state.cards.length === 0) return;
 
+    cardContainer.style.transition = 'none';
     cardContainer.classList.remove('is-flipped');
+    void cardContainer.offsetHeight;
+    cardContainer.style.transition = '';
+
     const card = state.cards[state.currentIndex];
 
-    // #3: RESET REVEAL BOX POSITION
-    revealBox.style.top = '0px';
-    revealBox.style.left = '0px';
+    revealBox.style.transition = 'none';
 
-    // Render Front
     const frontImage = cardFront.querySelector('.card-image');
     const frontText = cardFront.querySelector('.card-text');
     frontText.textContent = card.front_text || '';
     if (card.front_image_url) {
         frontImage.src = card.front_image_url;
         frontImage.style.display = 'block';
+        frontImage.onload = () => {
+            updateRevealBoxForImage(frontImage);
+            setTimeout(() => {
+                revealBox.style.transition = 'width 0.3s ease, height 0.3s ease, top 0.3s ease, left 0.3s ease';
+            }, 50);
+        };
     } else {
         frontImage.style.display = 'none';
+        updateRevealBoxForImage(frontImage);
     }
 
-    // Render Back
     const backImage = cardBack.querySelector('.card-image');
     const backText = cardBack.querySelector('.card-text');
     const backDefinition = cardBack.querySelector('.card-definition');
@@ -86,7 +122,61 @@ function renderCurrentCard() {
     cardCounter.textContent = `${state.currentIndex + 1} / ${state.cards.length}`;
 }
 
+
 // --- MEMORY GAME LOGIC ---
+
+// ===== NEW DYNAMIC LAYOUT LOGIC =====
+function updateMemoryGridLayout() {
+    if (state.currentMode !== 'memory' || state.cards.length === 0) return;
+
+    const totalCards = state.cards.length * 2;
+    const containerWidth = memoryGrid.clientWidth;
+    const containerHeight = memoryGrid.clientHeight;
+    
+    if (containerWidth === 0 || containerHeight === 0) return;
+    const containerRatio = containerWidth / containerHeight;
+
+    let bestLayout = { cols: totalCards, rows: 1, diff: Infinity };
+
+    // Find all factor pairs of totalCards
+    for (let rows = 1; rows * rows <= totalCards; rows++) {
+        if (totalCards % rows === 0) {
+            const cols = totalCards / rows;
+            
+            // Check layout: rows x cols
+            let layoutRatio1 = cols / rows;
+            let diff1 = Math.abs(layoutRatio1 - containerRatio);
+            if (diff1 < bestLayout.diff) {
+                bestLayout = { cols, rows, diff: diff1 };
+            }
+
+            // Check inverted layout: cols x rows
+            let layoutRatio2 = rows / cols;
+            let diff2 = Math.abs(layoutRatio2 - containerRatio);
+            if (diff2 < bestLayout.diff) {
+                bestLayout = { cols: rows, rows: cols, diff: diff2 };
+            }
+        }
+    }
+
+    const gapValue = parseFloat(getComputedStyle(memoryGrid).gap) || 16;
+    
+    const totalGapWidth = (bestLayout.cols - 1) * gapValue;
+    const totalGapHeight = (bestLayout.rows - 1) * gapValue;
+
+    const maxTileWidth = (containerWidth - totalGapWidth) / bestLayout.cols;
+    const maxTileHeight = (containerHeight - totalGapHeight) / bestLayout.rows;
+
+    const tileSize = Math.floor(Math.min(maxTileWidth, maxTileHeight));
+
+    // Apply the calculated size to the grid
+    memoryGrid.style.gridTemplateColumns = `repeat(${bestLayout.cols}, ${tileSize}px)`;
+    memoryGrid.style.gridTemplateRows = `repeat(${bestLayout.rows}, ${tileSize}px)`;
+    memoryGrid.style.justifyContent = 'center';
+    memoryGrid.style.alignContent = 'center';
+}
+// ===== END OF NEW LAYOUT LOGIC =====
+
 function setupMemoryGame() {
     state.isGameStarted = false;
     state.matchedPairs = 0;
@@ -100,17 +190,25 @@ function setupMemoryGame() {
         [pairedCards[i], pairedCards[j]] = [pairedCards[j], pairedCards[i]];
     }
 
+    let cardIndex = 1;
     pairedCards.forEach(card => {
         const cardElement = document.createElement('div');
         cardElement.classList.add('memory-card');
         cardElement.dataset.matchId = card.id;
         const frontContent = card.front_image_url ? `<img src="${card.front_image_url}">` : card.front_text;
         cardElement.innerHTML = `
-            <div class="memory-face memory-front"></div>
+            <div class="memory-face memory-front">${cardIndex}</div>
             <div class="memory-face memory-back">${frontContent}</div>
         `;
         memoryGrid.appendChild(cardElement);
+        cardIndex++;
     });
+
+    updateMemoryGridLayout();
+    if (!resizeObserver) {
+        resizeObserver = new ResizeObserver(updateMemoryGridLayout);
+        resizeObserver.observe(memoryGrid);
+    }
 }
 
 function flipCard(card) {
@@ -155,9 +253,7 @@ function resetBoard() {
 }
 
 // --- EVENT LISTENERS ---
-cardContainer.addEventListener('click', () => {
-    cardContainer.classList.toggle('is-flipped');
-});
+cardContainer.addEventListener('click', () => cardContainer.classList.toggle('is-flipped'));
 
 nextBtn.addEventListener('click', () => {
     if (state.currentIndex < state.cards.length - 1) {
@@ -165,7 +261,6 @@ nextBtn.addEventListener('click', () => {
         renderCurrentCard();
     }
 });
-
 prevBtn.addEventListener('click', () => {
     if (state.currentIndex > 0) {
         state.currentIndex--;
@@ -179,14 +274,22 @@ modeSwitcher.addEventListener('click', (e) => {
     state.currentMode = btn.dataset.mode;
     modeSwitcher.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
+
     if (state.currentMode === 'memory') {
         flashcardViewport.style.display = 'none';
         memoryGameContainer.style.display = 'flex';
+        studyControls.style.display = 'none';
         setupMemoryGame();
     } else {
         flashcardViewport.style.display = 'block';
         memoryGameContainer.style.display = 'none';
-        revealBox.style.display = state.currentMode === 'reveal' ? 'block' : 'none';
+        studyControls.style.display = 'flex';
+        const frontImage = cardFront.querySelector('.card-image');
+        revealBox.style.display = state.currentMode === 'reveal' && frontImage.style.display === 'block' ? 'block' : 'none';
+        if (resizeObserver) {
+            resizeObserver.disconnect();
+            resizeObserver = null;
+        }
     }
 });
 
@@ -198,10 +301,7 @@ startGameBtn.addEventListener('click', () => {
     state.isGameStarted = true;
     startGameBtn.disabled = true;
     memoryGrid.querySelectorAll('.memory-card').forEach(card => card.classList.add('is-flipped'));
-    
-    // #2: Use the value from the new input field
     const revealTime = (parseInt(memoryTimerInput.value, 10) || 3) * 1000;
-    
     setTimeout(() => {
         memoryGrid.querySelectorAll('.memory-card').forEach(card => card.classList.remove('is-flipped'));
     }, revealTime);
@@ -217,6 +317,7 @@ memoryGrid.addEventListener('click', (e) => {
 
 // --- DRAG-AND-DROP LOGIC ---
 revealBox.addEventListener('mousedown', (e) => {
+    revealBox.style.transition = 'none';
     state.isDragging = true;
     state.dragOffsetX = e.clientX - revealBox.offsetLeft;
     state.dragOffsetY = e.clientY - revealBox.offsetTop;
@@ -231,8 +332,10 @@ window.addEventListener('mousemove', (e) => {
 });
 
 window.addEventListener('mouseup', () => {
+    revealBox.style.transition = 'width 0.3s ease, height 0.3s ease, top 0.3s ease, left 0.3s ease';
     state.isDragging = false;
 });
+
 
 // --- INITIALIZATION ---
 async function initializeApp() {
