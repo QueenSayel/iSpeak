@@ -22,7 +22,7 @@ body {
     background-color: var(--body-bg-color);
     color: var(--text-color);
     margin: 0;
-    overflow-x: hidden; /* Prevent horizontal scroll */
+    overflow-x: hidden;
 }
 
 /* --- HIDE SCROLLBARS --- */
@@ -163,6 +163,7 @@ body,
     margin-bottom: 1.5rem;
     display: flex;
     align-items: center;
+	white-space: nowrap;
 }
 .card h2 i {
     margin-right: 0.75rem;
@@ -382,17 +383,15 @@ button:active {
     background: transparent;
     border: none;
     cursor: pointer;
-    padding: 0.5rem; /* Adds a clickable area around the icon */
-    font-size: 1.1rem; /* Makes the icon a bit larger and easier to see */
+    padding: 0.5rem;
+    font-size: 1.1rem;
     transition: color 0.2s ease, transform 0.2s ease;
 }
 
-/* Add a nice "pop" effect on hover for all icon buttons */
 .action-icon-btn:hover {
     transform: scale(1.2);
 }
 
-/* Specific coloring for the 'Manage' icon */
 .manage-btn.action-icon-btn {
     color: var(--text-light-color);
 }
@@ -400,14 +399,11 @@ button:active {
     color: var(--dark-color);
 }
 
-/* Specific coloring for the 'Delete' icon */
 .delete-btn.action-icon-btn {
-    /* Override the general .delete-btn styles */
     background: transparent; 
     color: var(--danger-color);
 }
 .delete-btn.action-icon-btn:hover {
-    /* Override the general .delete-btn hover styles */
     background: transparent;
     color: var(--danger-hover-color);
 }
@@ -418,9 +414,8 @@ button:active {
     align-items: center;
 }
 
-/* Style for the circular "Add Board" button */
 .add-board-btn {
-    font-size: 1.5rem; /* Make the plus icon a bit larger */
+    font-size: 1.5rem;
 }
 
 .manage-btn.action-icon-btn {
@@ -439,14 +434,14 @@ button:active {
     color: var(--danger-hover-color);
 }
 
-.action-icon-btn.add-btn { /* For "Add User" */
-    color: #48bb78; /* Green */
+.action-icon-btn.add-btn {
+    color: #48bb78;
 }
 .action-icon-btn.add-btn:hover {
-    color: #38a169; /* Darker green */
+    color: #38a169;
 }
 
-.action-icon-btn.remove-btn { /* For "Remove User" */
+.action-icon-btn.remove-btn {
     color: var(--danger-color);
 }
 .action-icon-btn.remove-btn:hover {
@@ -476,16 +471,16 @@ button:active {
         gap: 0.5rem;
     }
      .sidebar-nav a span {
-        display: none; /* Hide text on mobile */
+        display: none;
     }
     .sidebar-nav a i {
-        margin-right: 0; /* No margin when text is hidden */
+        margin-right: 0;
     }
     .sidebar-footer {
         margin-top: 0;
     }
     #logout-btn span {
-        display: none; /* Hide text on mobile */
+        display: none;
     }
     #logout-btn i {
         margin-right: 0;
@@ -502,13 +497,11 @@ button:active {
 /* --- FLASHCARD MODULE STYLES --- */
 .flashcard-layout {
     display: grid;
-    /* Give more space to the main content area */
     grid-template-columns: 1fr 3fr; 
     gap: 2rem;
     align-items: start;
 }
 
-/* No changes needed for these styles */
 .fc-list {
     list-style: none;
     padding: 0;
@@ -579,7 +572,6 @@ button:active {
     border-radius: 8px;
 }
 
-/* Flashcard Editor Styles */
 #flashcard-editor-container {
     border-top: 4px solid var(--primary-color);
 }
@@ -607,20 +599,14 @@ button:active {
     box-sizing: border-box;
 }
 
-/* ===== KEY CHANGE FOR IMAGE PREVIEW ===== */
 .image-preview {
     display: none; 
     width: 100%;
-    height: 150px; /* Increased height slightly for better visibility */
-    
-    /* This is the magic property: It scales the image to fit inside the container without cropping */
+    height: 150px;
     object-fit: contain; 
-    
     border-radius: 6px;
     margin-bottom: 0.75rem;
     border: 1px solid var(--border-color);
-    
-    /* Add a subtle background to see the container's boundaries */
     background-color: var(--body-bg-color); 
 }
 
@@ -629,8 +615,7 @@ button:active {
     color: var(--text-light-color);
 }
 
-/* Responsive styles updated to handle the new layout better */
-@media (max-width: 1200px) { /* Changed breakpoint for better responsiveness */
+@media (max-width: 1200px) {
     .flashcard-layout {
         grid-template-columns: 1fr;
     }
@@ -640,22 +625,18 @@ button:active {
     transition: all 0.3s ease-in-out;
 }
 
-/* When the editor is active... */
 #flashcards-content.editor-active .flashcard-nav-col,
 #flashcards-content.editor-active .card:has(#flashcard-list) {
-    /* Hide the navigation column and the card list */
     opacity: 0;
     transform: scale(0.95);
     display: none;
 }
 
 #flashcards-content.editor-active .flashcard-layout {
-    /* When the editor is active, the layout becomes a single column */
     grid-template-columns: 1fr;
 }
 
 #flashcards-content.editor-active .flashcard-content-area {
-    /* The editor's container now spans the full width */
     grid-column: 1 / -1;
 }
 
@@ -667,4 +648,30 @@ button:active {
 }
 .view-set-btn:hover {
     color: var(--primary-color);
+}
+
+/* ===== NEW STYLES for Flashcard List ===== */
+.fc-list-item-content {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-grow: 1;
+    overflow: hidden; /* Prevents long text from breaking layout */
+}
+.fc-list-item-content span {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.fc-list-item-content .separator {
+    color: var(--border-color);
+    font-weight: bold;
+}
+.fc-thumbnail {
+    height: 35px;
+    width: 55px;
+    border-radius: 4px;
+    object-fit: cover;
+    border: 1px solid var(--border-color);
+    flex-shrink: 0; /* Prevents images from shrinking */
 }
