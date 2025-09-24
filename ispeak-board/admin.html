@@ -93,10 +93,9 @@
 			<div id="flashcards-content" class="content-tab">
 				<h1><i class="fa-solid fa-clone"></i> Flashcard Creator</h1>
 				
-				<!-- The main layout is still a grid, but the structure inside has changed -->
 				<div class="flashcard-layout">
 
-					<!-- Column 1: Categories & Sets (This column remains the same) -->
+					<!-- Column 1: Categories & Sets -->
 					<div class="flashcard-nav-col">
 						<div class="card">
 							<h2><i class="fa-solid fa-folder-tree"></i> Categories</h2>
@@ -106,21 +105,22 @@
 								<button type="submit" title="Add Category"><i class="fa-solid fa-plus"></i></button>
 							</form>
 						</div>
-						<div class="card">
+						<!-- MODIFICATION: Added ID and style="display:none" -->
+						<div id="flashcard-sets-card" class="card" style="display:none;">
 							<h2><i class="fa-solid fa-book-bookmark"></i> Sets in&nbsp;<span id="selected-category-name">...</span></h2>
 							<ul id="flashcard-set-list" class="fc-list"></ul>
-							<form id="new-set-form" class="fc-form" style="display:none;">
+							<form id="new-set-form" class="fc-form">
 								<input type="text" id="new-set-name" placeholder="New set name..." required>
 								<button type="submit" title="Add Set"><i class="fa-solid fa-plus"></i></button>
 							</form>
 						</div>
 					</div>
 
-					<!-- NEW: Column 2 is now a single container for the content that will stack vertically -->
+					<!-- Column 2: Content Area -->
 					<div class="flashcard-content-area">
 						
-						<!-- Item 1: The list of cards now sits in its own card, taking the full width of this column -->
-						<div class="card">
+						<!-- MODIFICATION: Added ID and style="display:none" -->
+						<div id="flashcard-cards-card" class="card" style="display:none;">
 							<h2><i class="fa-solid fa-list-ul"></i> Cards in&nbsp;<span id="selected-set-name">...</span></h2>
 							<p id="flashcard-list-placeholder">Select a set to see its flashcards.</p>
 							<ul id="flashcard-list" class="fc-list"></ul>
@@ -129,7 +129,6 @@
 							</button>
 						</div>
 
-						<!-- Item 2: The editor is a separate card below the list, also taking the full width -->
 						<div id="flashcard-editor-container" class="card" style="display:none;">
 							<h2 id="editor-heading"><i class="fa-solid fa-pen-to-square"></i> Create New Card</h2>
 							<form id="flashcard-editor-form">
@@ -181,7 +180,6 @@
         <div class="modal-content">
             <h2 id="modal-event-title">Event Details</h2>
             
-            <!-- This section shows for AVAILABLE slots -->
             <div id="available-slot-details">
                 <p>You can modify the time range or delete this available slot.</p>
                 <div class="form-group">
@@ -198,7 +196,6 @@
                 </div>
             </div>
 
-            <!-- This section shows for BOOKED slots -->
 			<div id="booked-slot-details">
 				<p>This lesson has been booked. You can cancel the booking to make the slot available again.</p>
 				<p><strong>Booked by:</strong> <span id="booked-by-email">Loading...</span></p>
@@ -235,7 +232,6 @@
 			<div id="modal-lesson-info" style="margin-bottom: 1.5rem; color: var(--text-color); border-bottom: 1px solid var(--border-color); padding-bottom: 1rem;">Loading...</div>
 			
 			<p><strong>Lesson Notes (Visible to Admins):</strong></p>
-			<!-- Container for the Rich Text Editor -->
 			<div id="quill-editor"></div>
 
 			<div class="button-group">
