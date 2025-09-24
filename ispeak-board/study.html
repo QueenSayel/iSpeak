@@ -31,6 +31,9 @@
 			<button data-mode="memory" class="mode-btn">
                 <i class="fa-solid fa-puzzle-piece"></i> Memory
             </button>
+            <button data-mode="missing" class="mode-btn">
+                <i class="fa-solid fa-eye-slash"></i> What's Missing
+            </button>
         </div>
     </header>
 
@@ -62,6 +65,16 @@
                 <button id="start-game-btn">Start Game</button>
             </div>
             <!-- ===== MODIFICATION END ===== -->
+        </div>
+        <div id="missing-game-container">
+            <div id="missing-grid"></div>
+            <div class="missing-controls">
+                <label for="missing-count-input">Remove:</label>
+                <input type="number" id="missing-count-input" value="1" min="1">
+                <span>card(s)</span>
+                <button id="start-missing-game-btn">Start Game</button>
+                <button id="reveal-missing-btn">Reveal Missing Card</button>
+            </div>
         </div>
     </main>
 
