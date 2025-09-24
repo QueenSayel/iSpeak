@@ -18,6 +18,11 @@ const memoryGrid = document.getElementById('memory-grid');
 const startGameBtn = document.getElementById('start-game-btn');
 const memoryTimerInput = document.getElementById('memory-timer-input');
 const studyControls = document.querySelector('.study-controls');
+const missingGameContainer = document.getElementById('missing-game-container');
+const missingGrid = document.getElementById('missing-grid');
+const startMissingGameBtn = document.getElementById('start-missing-game-btn');
+const missingCountInput = document.getElementById('missing-count-input');
+const revealMissingBtn = document.getElementById('reveal-missing-btn');
 
 // --- STATE MANAGEMENT ---
 const state = {
@@ -32,6 +37,8 @@ const state = {
     secondCardFlipped: null,
     lockBoard: false,
     matchedPairs: 0,
+    missingCards: [],
+    isMissingGameStarted: false,
 };
 
 let resizeObserver = null;
@@ -252,6 +259,145 @@ function resetBoard() {
     state.lockBoard = false;
 }
 
+// --- WHAT'S MISSING GAME LOGIC ---
+
+// ===== NEW DYNAMIC LAYOUT LOGIC for Missing Game =====
+function updateMissingGridLayout() {
+    if (state.currentMode !== 'missing' || state.cards.length === 0) return;
+
+    const totalCards = state.cards.length;
+    const containerWidth = missingGrid.clientWidth;
+    const containerHeight = missingGrid.clientHeight;
+    
+    if (containerWidth === 0 || containerHeight === 0) return;
+    const containerRatio = containerWidth / containerHeight;
+
+    let bestLayout = { cols: totalCards, rows: 1, diff: Infinity };
+
+    for (let rows = 1; rows * rows <= totalCards; rows++) {
+        if (totalCards % rows === 0) {
+            const cols = totalCards / rows;
+            
+            let layoutRatio1 = cols / rows;
+            let diff1 = Math.abs(layoutRatio1 - containerRatio);
+            if (diff1 < bestLayout.diff) {
+                bestLayout = { cols, rows, diff: diff1 };
+            }
+        }
+    }
+    
+    // Check for factor pairs where rows > cols
+    for (let cols = 1; cols * cols <= totalCards; cols++) {
+        if (totalCards % cols === 0) {
+            const rows = totalCards / cols;
+             let layoutRatio2 = cols / rows;
+            let diff2 = Math.abs(layoutRatio2 - containerRatio);
+            if (diff2 < bestLayout.diff) {
+                bestLayout = { cols, rows, diff: diff2 };
+            }
+        }
+    }
+
+
+    const gapValue = parseFloat(getComputedStyle(missingGrid).gap) || 16;
+    const totalGapWidth = (bestLayout.cols - 1) * gapValue;
+    const totalGapHeight = (bestLayout.rows - 1) * gapValue;
+
+    const maxTileWidth = (containerWidth - totalGapWidth) / bestLayout.cols;
+    const maxTileHeight = (containerHeight - totalGapHeight) / bestLayout.rows;
+    const tileSize = Math.floor(Math.min(maxTileWidth, maxTileHeight));
+
+    missingGrid.style.gridTemplateColumns = `repeat(${bestLayout.cols}, ${tileSize}px)`;
+    missingGrid.style.gridTemplateRows = `repeat(${bestLayout.rows}, ${tileSize}px)`;
+    missingGrid.style.justifyContent = 'center';
+    missingGrid.style.alignContent = 'center';
+}
+
+function setupMissingGame() {
+    state.isMissingGameStarted = false;
+    state.missingCards = [];
+    missingGrid.innerHTML = '';
+
+    // Reset buttons
+    startMissingGameBtn.textContent = 'Start Game';
+    startMissingGameBtn.disabled = false;
+    revealMissingBtn.style.display = 'none';
+    missingCountInput.max = state.cards.length -1 || 1;
+
+
+    state.cards.forEach(card => {
+        const cardElement = document.createElement('div');
+        cardElement.classList.add('missing-card');
+        cardElement.dataset.id = card.id;
+
+		const content = card.front_image_url 
+			? `<img src="${card.front_image_url}">` 
+			: `<span class="original-text">${card.front_text}</span>`;
+        cardElement.innerHTML = content;
+        missingGrid.appendChild(cardElement);
+    });
+    
+    updateMissingGridLayout();
+    if (!resizeObserver) {
+        resizeObserver = new ResizeObserver(updateMissingGridLayout);
+        resizeObserver.observe(missingGrid);
+    }
+}
+
+function startMissingGame() {
+    state.isMissingGameStarted = true;
+    startMissingGameBtn.disabled = true;
+    revealMissingBtn.style.display = 'none';
+    missingGrid.querySelectorAll('.missing-card').forEach(c => c.classList.remove('is-revealed'));
+
+    // 1. Hide all cards
+    const allCardsInGrid = missingGrid.querySelectorAll('.missing-card');
+    allCardsInGrid.forEach(cardEl => cardEl.classList.add('is-hidden'));
+
+    // 2. Select the missing cards
+    const numToRemove = parseInt(missingCountInput.value, 10) || 1;
+    const shuffledCards = [...state.cards].sort(() => 0.5 - Math.random());
+    state.missingCards = shuffledCards.slice(0, numToRemove);
+
+    // 2a. Build a Set of missing IDs as strings
+    const missingCardIds = new Set(state.missingCards.map(c => String(c.id)));
+
+    // 3. Wait a moment, then reveal all but the missing one
+    setTimeout(() => {
+        allCardsInGrid.forEach(cardEl => {
+            const cardId = cardEl.dataset.id; // keep as string
+            if (missingCardIds.has(cardId)) {
+                cardEl.classList.add('is-missing');
+                cardEl.innerHTML = '?';              // replace content first
+                cardEl.classList.remove('is-hidden'); // then un-hide
+            } else {
+                cardEl.classList.remove('is-hidden');
+            }
+        });
+        revealMissingBtn.style.display = 'block';
+    }, 2000); // 2-second delay
+}
+
+function revealMissing() {
+    state.missingCards.forEach(missingCard => {
+        const cardElement = missingGrid.querySelector(`.missing-card[data-id="${missingCard.id}"]`);
+        if (cardElement) {
+            cardElement.classList.remove('is-missing');
+            cardElement.classList.add('is-revealed');
+			const content = missingCard.front_image_url 
+				? `<img src="${missingCard.front_image_url}">` 
+				: `<span class="original-text">${missingCard.front_text}</span>`;
+            cardElement.innerHTML = content;
+        }
+    });
+
+    // Reset for next round
+    startMissingGameBtn.textContent = 'Play Again?';
+    startMissingGameBtn.disabled = false;
+    revealMissingBtn.style.display = 'none';
+}
+
+
 // --- EVENT LISTENERS ---
 cardContainer.addEventListener('click', () => cardContainer.classList.toggle('is-flipped'));
 
@@ -275,21 +421,28 @@ modeSwitcher.addEventListener('click', (e) => {
     modeSwitcher.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
 
+    // Hide all containers first
+    flashcardViewport.style.display = 'none';
+    memoryGameContainer.style.display = 'none';
+    missingGameContainer.style.display = 'none';
+    studyControls.style.display = 'none';
+    if (resizeObserver) {
+        resizeObserver.disconnect();
+        resizeObserver = null;
+    }
+
     if (state.currentMode === 'memory') {
-        flashcardViewport.style.display = 'none';
         memoryGameContainer.style.display = 'flex';
-        studyControls.style.display = 'none';
         setupMemoryGame();
-    } else {
+    } else if (state.currentMode === 'missing') {
+        missingGameContainer.style.display = 'flex';
+        setupMissingGame();
+    }
+    else { // Linear or Reveal
         flashcardViewport.style.display = 'block';
-        memoryGameContainer.style.display = 'none';
         studyControls.style.display = 'flex';
         const frontImage = cardFront.querySelector('.card-image');
         revealBox.style.display = state.currentMode === 'reveal' && frontImage.style.display === 'block' ? 'block' : 'none';
-        if (resizeObserver) {
-            resizeObserver.disconnect();
-            resizeObserver = null;
-        }
     }
 });
 
@@ -314,6 +467,16 @@ memoryGrid.addEventListener('click', (e) => {
         flipCard(clickedCard);
     }
 });
+
+startMissingGameBtn.addEventListener('click', () => {
+    if (startMissingGameBtn.textContent.includes('Play Again')) {
+        setupMissingGame(); // This will reset the board
+    } else {
+        startMissingGame();
+    }
+});
+
+revealMissingBtn.addEventListener('click', revealMissing);
 
 // --- DRAG-AND-DROP LOGIC ---
 revealBox.addEventListener('mousedown', (e) => {
