@@ -1,190 +1,352 @@
-import { supabase } from './supabaseClient';
+// src/study.js
+import { supabase } from './supabaseClient.js';
 
 // --- ELEMENT REFERENCES ---
-const logoutBtn = document.getElementById('logout-btn');
-const myBoardList = document.getElementById('my-board-list');
-const boardsTabBtn = document.getElementById('boards-tab-btn');
-const scheduleTabBtn = document.getElementById('schedule-tab-btn');
-const boardsContent = document.getElementById('boards-content');
-const scheduleContent = document.getElementById('schedule-content');
-const calendarEl = document.getElementById('calendar');
+const loadingOverlay = document.getElementById('loading-overlay');
+const setNameHeading = document.getElementById('set-name-heading');
+const prevBtn = document.getElementById('prev-card-btn');
+const nextBtn = document.getElementById('next-card-btn');
+const cardCounter = document.getElementById('card-counter');
+const modeSwitcher = document.querySelector('.mode-switcher');
+const cardContainer = document.getElementById('flashcard-container');
+const cardFront = document.getElementById('card-front');
+const cardBack = document.getElementById('card-back');
+const revealBox = document.getElementById('reveal-box');
+const flashcardViewport = document.getElementById('flashcard-viewport');
+const memoryGameContainer = document.getElementById('memory-game-container');
+const memoryGrid = document.getElementById('memory-grid');
+const startGameBtn = document.getElementById('start-game-btn');
+const memoryTimerInput = document.getElementById('memory-timer-input');
+const studyControls = document.querySelector('.study-controls');
 
-// Modal Elements
-const bookingModal = document.getElementById('booking-modal');
-const modalTitle = document.getElementById('modal-title');
-const modalTimeDetails = document.getElementById('modal-time-details');
-const availableBookingDetails = document.getElementById('available-booking-details');
-const myBookingDetails = document.getElementById('my-booking-details');
-const otherBookingDetails = document.getElementById('other-booking-details');
-const meetingLink = document.getElementById('meeting-link');
-const bookLessonBtn = document.getElementById('book-lesson-btn');
-const cancelLessonBtn = document.getElementById('cancel-lesson-btn');
-const closeModalBtn = document.getElementById('close-modal-btn');
+// --- STATE MANAGEMENT ---
+const state = {
+    cards: [],
+    currentIndex: 0,
+    currentMode: 'linear',
+    isDragging: false,
+    dragOffsetX: 0,
+    dragOffsetY: 0,
+    isGameStarted: false,
+    firstCardFlipped: null,
+    secondCardFlipped: null,
+    lockBoard: false,
+    matchedPairs: 0,
+};
 
-let calendar = null;
-let userProfile = null;
-let currentSelectedEvent = null;
+let resizeObserver = null;
 
-// --- AUTH GUARD (Upgraded to fetch full profile) ---
-async function checkAuth() {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
-        window.location.href = '/login';
+// --- DATA FETCHING ---
+async function loadSetData(setId) {
+    const { data: setData, error: setError } = await supabase.from('flashcard_sets').select('name').eq('id', setId).single();
+    if (setError) { console.error('Error fetching set name', setError); return; }
+    
+    const { data: cardsData, error: cardsError } = await supabase.from('flashcards').select('*').eq('set_id', setId).order('created_at');
+    if (cardsError) { console.error('Error fetching cards', cardsError); return; }
+
+    state.cards = cardsData;
+    setNameHeading.textContent = setData.name;
+    loadingOverlay.style.display = 'none';
+    renderCurrentCard();
+}
+
+// --- RENDERING & UI LOGIC ---
+
+function updateRevealBoxForImage(imageElement) {
+    if (imageElement.style.display === 'none') {
+        revealBox.style.display = 'none';
         return;
     }
-    const { data, error } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
-    if (error || !data) {
-        console.error('Could not fetch user profile:', error);
-        await supabase.auth.signOut();
-        window.location.href = '/login';
+    
+    const REVEAL_BOX_PADDING = 20;
+
+    const imageRect = imageElement.getBoundingClientRect();
+    const viewportRect = flashcardViewport.getBoundingClientRect();
+
+    const top = imageRect.top - viewportRect.top - (REVEAL_BOX_PADDING / 2);
+    const left = imageRect.left - viewportRect.left - (REVEAL_BOX_PADDING / 2);
+    const width = imageRect.width + REVEAL_BOX_PADDING;
+    const height = imageRect.height + REVEAL_BOX_PADDING;
+
+    revealBox.style.width = `${width}px`;
+    revealBox.style.height = `${height}px`;
+    revealBox.style.top = `${top}px`;
+    revealBox.style.left = `${left}px`;
+    
+    if (state.currentMode === 'reveal') {
+        revealBox.style.display = 'block';
+    }
+}
+
+function renderCurrentCard() {
+    if (state.cards.length === 0) return;
+
+    cardContainer.style.transition = 'none';
+    cardContainer.classList.remove('is-flipped');
+    void cardContainer.offsetHeight;
+    cardContainer.style.transition = '';
+
+    const card = state.cards[state.currentIndex];
+
+    revealBox.style.transition = 'none';
+
+    const frontImage = cardFront.querySelector('.card-image');
+    const frontText = cardFront.querySelector('.card-text');
+    frontText.textContent = card.front_text || '';
+    if (card.front_image_url) {
+        frontImage.src = card.front_image_url;
+        frontImage.style.display = 'block';
+        frontImage.onload = () => {
+            updateRevealBoxForImage(frontImage);
+            setTimeout(() => {
+                revealBox.style.transition = 'width 0.3s ease, height 0.3s ease, top 0.3s ease, left 0.3s ease';
+            }, 50);
+        };
     } else {
-        userProfile = data;
+        frontImage.style.display = 'none';
+        updateRevealBoxForImage(frontImage);
     }
+
+    const backImage = cardBack.querySelector('.card-image');
+    const backText = cardBack.querySelector('.card-text');
+    const backDefinition = cardBack.querySelector('.card-definition');
+    backText.textContent = card.back_text || '';
+    backDefinition.textContent = card.definition || '';
+    if (card.back_image_url) {
+        backImage.src = card.back_image_url;
+        backImage.style.display = 'block';
+    } else {
+        backImage.style.display = 'none';
+    }
+
+    cardCounter.textContent = `${state.currentIndex + 1} / ${state.cards.length}`;
 }
 
-// --- TAB SWITCHING (Unchanged) ---
-boardsTabBtn.addEventListener('click', () => { boardsContent.classList.add('active'); scheduleContent.classList.remove('active'); boardsTabBtn.classList.add('active'); scheduleTabBtn.classList.remove('active'); });
-scheduleTabBtn.addEventListener('click', () => { scheduleContent.classList.add('active'); boardsContent.classList.remove('active'); scheduleTabBtn.classList.add('active'); boardsTabBtn.classList.remove('active'); });
 
-// --- STUDENT CALENDAR LOGIC (Unchanged) ---
-function initializeStudentCalendar() {
-    if (calendar) return;
-    calendar = new FullCalendar.Calendar(calendarEl, {
-        initialView: 'listWeek',
-        headerToolbar: { left: 'prev,next today', center: 'title', right: 'listWeek,timeGridWeek' },
-        slotMinTime: '08:00:00', slotMaxTime: '20:00:00',
-        allDaySlot: false, height: 'auto',
-        events: async function() {
-            const { data, error } = await supabase.from('availability').select('*');
-            if (error) { console.error('Error fetching schedule:', error); return []; }
-            return data.map(slot => {
-                const isMyBooking = slot.booked_by === userProfile.id;
-                return {
-                    id: slot.id, start: slot.start_time, end: slot.end_time,
-                    title: isMyBooking ? 'My Lesson' : (slot.status === 'available' ? 'Available' : 'Booked'),
-                    backgroundColor: isMyBooking ? '#3182ce' : (slot.status === 'available' ? '#28a745' : '#e53e3e'),
-                    borderColor: isMyBooking ? '#3182ce' : (slot.status === 'available' ? '#28a745' : '#e53e3e'),
-                    interactive: slot.status === 'available' || isMyBooking
-                };
-            });
-        },
-        eventClick: function(info) {
-            openBookingModal(info.event);
+// --- MEMORY GAME LOGIC ---
+
+// ===== NEW DYNAMIC LAYOUT LOGIC =====
+function updateMemoryGridLayout() {
+    if (state.currentMode !== 'memory' || state.cards.length === 0) return;
+
+    const totalCards = state.cards.length * 2;
+    const containerWidth = memoryGrid.clientWidth;
+    const containerHeight = memoryGrid.clientHeight;
+    
+    if (containerWidth === 0 || containerHeight === 0) return;
+    const containerRatio = containerWidth / containerHeight;
+
+    let bestLayout = { cols: totalCards, rows: 1, diff: Infinity };
+
+    // Find all factor pairs of totalCards
+    for (let rows = 1; rows * rows <= totalCards; rows++) {
+        if (totalCards % rows === 0) {
+            const cols = totalCards / rows;
+            
+            // Check layout: rows x cols
+            let layoutRatio1 = cols / rows;
+            let diff1 = Math.abs(layoutRatio1 - containerRatio);
+            if (diff1 < bestLayout.diff) {
+                bestLayout = { cols, rows, diff: diff1 };
+            }
+
+            // Check inverted layout: cols x rows
+            let layoutRatio2 = rows / cols;
+            let diff2 = Math.abs(layoutRatio2 - containerRatio);
+            if (diff2 < bestLayout.diff) {
+                bestLayout = { cols: rows, rows: cols, diff: diff2 };
+            }
         }
+    }
+
+    const gapValue = parseFloat(getComputedStyle(memoryGrid).gap) || 16;
+    
+    const totalGapWidth = (bestLayout.cols - 1) * gapValue;
+    const totalGapHeight = (bestLayout.rows - 1) * gapValue;
+
+    const maxTileWidth = (containerWidth - totalGapWidth) / bestLayout.cols;
+    const maxTileHeight = (containerHeight - totalGapHeight) / bestLayout.rows;
+
+    const tileSize = Math.floor(Math.min(maxTileWidth, maxTileHeight));
+
+    // Apply the calculated size to the grid
+    memoryGrid.style.gridTemplateColumns = `repeat(${bestLayout.cols}, ${tileSize}px)`;
+    memoryGrid.style.gridTemplateRows = `repeat(${bestLayout.rows}, ${tileSize}px)`;
+    memoryGrid.style.justifyContent = 'center';
+    memoryGrid.style.alignContent = 'center';
+}
+// ===== END OF NEW LAYOUT LOGIC =====
+
+function setupMemoryGame() {
+    state.isGameStarted = false;
+    state.matchedPairs = 0;
+    startGameBtn.textContent = 'Start Game';
+    startGameBtn.disabled = false;
+    memoryGrid.innerHTML = '';
+    
+    const pairedCards = [...state.cards, ...state.cards];
+    for (let i = pairedCards.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [pairedCards[i], pairedCards[j]] = [pairedCards[j], pairedCards[i]];
+    }
+
+    let cardIndex = 1;
+    pairedCards.forEach(card => {
+        const cardElement = document.createElement('div');
+        cardElement.classList.add('memory-card');
+        cardElement.dataset.matchId = card.id;
+        const frontContent = card.front_image_url ? `<img src="${card.front_image_url}">` : card.front_text;
+        cardElement.innerHTML = `
+            <div class="memory-face memory-front">${cardIndex}</div>
+            <div class="memory-face memory-back">${frontContent}</div>
+        `;
+        memoryGrid.appendChild(cardElement);
+        cardIndex++;
     });
-    calendar.render();
+
+    updateMemoryGridLayout();
+    if (!resizeObserver) {
+        resizeObserver = new ResizeObserver(updateMemoryGridLayout);
+        resizeObserver.observe(memoryGrid);
+    }
 }
 
-// --- BOOKING MODAL LOGIC (Unchanged) ---
-function openBookingModal(event) {
-    currentSelectedEvent = event;
-    const isMyBooking = event.title === 'My Lesson';
-    const isAvailable = event.title === 'Available';
-    modalTitle.textContent = isMyBooking ? "Your Lesson Details" : (isAvailable ? "Book This Slot" : "Lesson Booked");
-    modalTimeDetails.textContent = `${event.start.toLocaleString()} - ${event.end.toLocaleString()}`;
-    availableBookingDetails.style.display = isAvailable ? 'block' : 'none';
-    myBookingDetails.style.display = isMyBooking ? 'block' : 'none';
-    otherBookingDetails.style.display = (!isAvailable && !isMyBooking) ? 'block' : 'none';
-    if (isMyBooking) {
-        if (userProfile.meeting_link) {
-            meetingLink.href = userProfile.meeting_link;
-            meetingLink.textContent = userProfile.meeting_link;
-        } else {
-            meetingLink.textContent = "No meeting link assigned. Please contact the admin.";
-            meetingLink.removeAttribute('href');
+function flipCard(card) {
+    if (state.lockBoard || card === state.firstCardFlipped) return;
+    card.classList.add('is-flipped');
+    if (!state.firstCardFlipped) {
+        state.firstCardFlipped = card;
+        return;
+    }
+    state.secondCardFlipped = card;
+    checkForMatch();
+}
+
+function checkForMatch() {
+    state.lockBoard = true;
+    const isMatch = state.firstCardFlipped.dataset.matchId === state.secondCardFlipped.dataset.matchId;
+    isMatch ? disableCards() : unflipCards();
+}
+
+function disableCards() {
+    state.firstCardFlipped.classList.add('is-matched');
+    state.secondCardFlipped.classList.add('is-matched');
+    state.matchedPairs++;
+    if (state.matchedPairs === state.cards.length) {
+        startGameBtn.textContent = 'You Won! Play Again?';
+        startGameBtn.disabled = false;
+    }
+    resetBoard();
+}
+
+function unflipCards() {
+    setTimeout(() => {
+        state.firstCardFlipped.classList.remove('is-flipped');
+        state.secondCardFlipped.classList.remove('is-flipped');
+        resetBoard();
+    }, 1200);
+}
+
+function resetBoard() {
+    [state.firstCardFlipped, state.secondCardFlipped] = [null, null];
+    state.lockBoard = false;
+}
+
+// --- EVENT LISTENERS ---
+cardContainer.addEventListener('click', () => cardContainer.classList.toggle('is-flipped'));
+
+nextBtn.addEventListener('click', () => {
+    if (state.currentIndex < state.cards.length - 1) {
+        state.currentIndex++;
+        renderCurrentCard();
+    }
+});
+prevBtn.addEventListener('click', () => {
+    if (state.currentIndex > 0) {
+        state.currentIndex--;
+        renderCurrentCard();
+    }
+});
+
+modeSwitcher.addEventListener('click', (e) => {
+    const btn = e.target.closest('.mode-btn');
+    if (!btn) return;
+    state.currentMode = btn.dataset.mode;
+    modeSwitcher.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+
+    if (state.currentMode === 'memory') {
+        flashcardViewport.style.display = 'none';
+        memoryGameContainer.style.display = 'flex';
+        studyControls.style.display = 'none';
+        setupMemoryGame();
+    } else {
+        flashcardViewport.style.display = 'block';
+        memoryGameContainer.style.display = 'none';
+        studyControls.style.display = 'flex';
+        const frontImage = cardFront.querySelector('.card-image');
+        revealBox.style.display = state.currentMode === 'reveal' && frontImage.style.display === 'block' ? 'block' : 'none';
+        if (resizeObserver) {
+            resizeObserver.disconnect();
+            resizeObserver = null;
         }
     }
-    bookingModal.style.display = 'flex';
-}
+});
 
-function closeModal() {
-    bookingModal.style.display = 'none';
-    currentSelectedEvent = null;
-}
+startGameBtn.addEventListener('click', () => {
+    if (startGameBtn.textContent.includes('Play Again')) {
+        setupMemoryGame();
+        return;
+    }
+    state.isGameStarted = true;
+    startGameBtn.disabled = true;
+    memoryGrid.querySelectorAll('.memory-card').forEach(card => card.classList.add('is-flipped'));
+    const revealTime = (parseInt(memoryTimerInput.value, 10) || 3) * 1000;
+    setTimeout(() => {
+        memoryGrid.querySelectorAll('.memory-card').forEach(card => card.classList.remove('is-flipped'));
+    }, revealTime);
+});
 
-// --- MODAL BUTTON EVENT LISTENERS (CORRECTED) ---
-bookLessonBtn.addEventListener('click', async () => {
-    if (!currentSelectedEvent) return;
-    
-    // Use the event object directly, before it's cleared
-    const eventToBook = currentSelectedEvent;
-
-    // Optimistic UI Update
-    eventToBook.setProp('title', 'My Lesson');
-    eventToBook.setProp('backgroundColor', '#3182ce');
-    eventToBook.setProp('borderColor', '#3182ce');
-    
-    // NOW close the modal. `eventToBook` still holds the reference we need.
-    closeModal();
-    
-    // Database update
-    const { error } = await supabase.from('availability')
-        .update({ status: 'booked', booked_by: userProfile.id })
-        .eq('id', eventToBook.id) // Use the stored reference
-        .eq('status', 'available');
-
-    if (error) {
-        console.error('Error booking lesson:', error);
-        alert('Could not book lesson. The schedule will refresh.');
-        calendar.refetchEvents();
+memoryGrid.addEventListener('click', (e) => {
+    if (!state.isGameStarted) return;
+    const clickedCard = e.target.closest('.memory-card');
+    if (clickedCard && !clickedCard.classList.contains('is-matched')) {
+        flipCard(clickedCard);
     }
 });
 
-cancelLessonBtn.addEventListener('click', async () => {
-    if (!currentSelectedEvent) return;
-
-    // --- ADDED CONFIRMATION WRAPPER ---
-    if (confirm("Are you sure you want to cancel this booking?")) {
-        const eventToCancel = currentSelectedEvent;
-
-        // Optimistic UI Update
-        eventToCancel.setProp('title', 'Available');
-        eventToCancel.setProp('backgroundColor', '#28a745');
-        eventToCancel.setProp('borderColor', '#28a745');
-        
-        closeModal();
-
-        // Database update
-        const { error } = await supabase.from('availability')
-            .update({ status: 'available', booked_by: null })
-            .eq('id', eventToCancel.id);
-
-        if (error) {
-            console.error('Error cancelling lesson:', error);
-            alert('Could not cancel your booking. The schedule will refresh.');
-            calendar.refetchEvents();
-        }
-    }
+// --- DRAG-AND-DROP LOGIC ---
+revealBox.addEventListener('mousedown', (e) => {
+    revealBox.style.transition = 'none';
+    state.isDragging = true;
+    state.dragOffsetX = e.clientX - revealBox.offsetLeft;
+    state.dragOffsetY = e.clientY - revealBox.offsetTop;
 });
 
-closeModalBtn.addEventListener('click', closeModal);
+window.addEventListener('mousemove', (e) => {
+    if (!state.isDragging) return;
+    let newX = e.clientX - state.dragOffsetX;
+    let newY = e.clientY - state.dragOffsetY;
+    revealBox.style.left = `${newX}px`;
+    revealBox.style.top = `${newY}px`;
+});
 
-// --- FETCH ASSIGNED BOARDS (Unchanged) ---
-async function fetchMyBoards() {
-    const { data: boards, error } = await supabase.from('boards').select('id, name, created_at').order('created_at', { ascending: false });
-    if (error) { console.error('Error fetching assigned boards:', error); myBoardList.innerHTML = '<li>Could not load your boards.</li>'; return; }
-    myBoardList.innerHTML = '';
-    if (boards.length === 0) { myBoardList.innerHTML = '<li>You have not been assigned to any boards yet.</li>'; } else {
-        boards.forEach(board => {
-            const li = document.createElement('li');
-            li.innerHTML = `<a href="/board/b/${board.id}" target="_blank">${board.name}</a>`;
-            myBoardList.appendChild(li);
-        });
+window.addEventListener('mouseup', () => {
+    revealBox.style.transition = 'width 0.3s ease, height 0.3s ease, top 0.3s ease, left 0.3s ease';
+    state.isDragging = false;
+});
+
+
+// --- INITIALIZATION ---
+async function initializeApp() {
+    const params = new URLSearchParams(window.location.search);
+    const setId = params.get('set_id');
+
+    if (setId) {
+        await loadSetData(setId);
+    } else {
+        loadingOverlay.innerHTML = '<p>Error: No Set ID provided.</p>';
     }
 }
 
-// --- LOGOUT (Unchanged) ---
-logoutBtn.addEventListener('click', async () => {
-    await supabase.auth.signOut();
-    window.location.href = '/login';
-});
-
-// --- INITIALIZE THE PAGE ---
-async function init() {
-    await checkAuth();
-    fetchMyBoards();
-    initializeStudentCalendar();
-}
-
-init();
-
+initializeApp();
