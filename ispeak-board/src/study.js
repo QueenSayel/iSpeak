@@ -274,30 +274,26 @@ function updateMissingGridLayout() {
 
     let bestLayout = { cols: totalCards, rows: 1, diff: Infinity };
 
+    // Find all factor pairs
     for (let rows = 1; rows * rows <= totalCards; rows++) {
         if (totalCards % rows === 0) {
             const cols = totalCards / rows;
-            
+
+            // rows x cols
             let layoutRatio1 = cols / rows;
             let diff1 = Math.abs(layoutRatio1 - containerRatio);
             if (diff1 < bestLayout.diff) {
                 bestLayout = { cols, rows, diff: diff1 };
             }
-        }
-    }
-    
-    // Check for factor pairs where rows > cols
-    for (let cols = 1; cols * cols <= totalCards; cols++) {
-        if (totalCards % cols === 0) {
-            const rows = totalCards / cols;
-             let layoutRatio2 = cols / rows;
+
+            // cols x rows (inverted)
+            let layoutRatio2 = rows / cols;
             let diff2 = Math.abs(layoutRatio2 - containerRatio);
             if (diff2 < bestLayout.diff) {
-                bestLayout = { cols, rows, diff: diff2 };
+                bestLayout = { cols: rows, rows: cols, diff: diff2 };
             }
         }
     }
-
 
     const gapValue = parseFloat(getComputedStyle(missingGrid).gap) || 16;
     const totalGapWidth = (bestLayout.cols - 1) * gapValue;
