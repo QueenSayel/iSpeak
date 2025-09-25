@@ -150,6 +150,7 @@ button i { margin: 0 0.5rem; }
 
 #missing-grid {
     display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
     gap: 1rem;
     width: 100%;
     max-width: 1200px;
