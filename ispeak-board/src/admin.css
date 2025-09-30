@@ -626,9 +626,7 @@ button:active {
 }
 
 #flashcards-content.editor-active .flashcard-nav-col,
-#flashcards-content.editor-active .card:has(#flashcard-list) {
-    opacity: 0;
-    transform: scale(0.95);
+#flashcards-content.editor-active #flashcard-cards-card {
     display: none;
 }
 
